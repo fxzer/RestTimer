@@ -43,71 +43,59 @@ struct SettingsView: View {
                     .toggleStyle(SwitchToggleStyle(tint: .blue))
                     .padding(.vertical, 5)
                 
-                HStack(alignment: .center) {
+                HStack {
                     Text("专注时长")
                         .frame(width: 80, alignment: .leading)
                     
                     Spacer()
                     
-                    HStack(spacing: 4) {
-                        TextField("", text: $workMinutes)
-                            .frame(width: 40)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .multilineTextAlignment(.trailing)
-                            .onChange(of: workMinutes) { newValue in
-                                if let minutes = Int(newValue), minutes >= 0 {
-                                    timerManager.workDurationMinutes = minutes
-                                }
-                            }
-                        Text("分")
-                            .frame(height: 22)
-                        
-                        TextField("", text: $workSeconds)
-                            .frame(width: 40)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .multilineTextAlignment(.trailing)
-                            .onChange(of: workSeconds) { newValue in
-                                if let seconds = Int(newValue), seconds >= 0 && seconds < 60 {
-                                    timerManager.workDurationSeconds = seconds
-                                }
-                            }
-                        Text("秒")
-                            .frame(height: 22)
-                    }
+                    CustomTextField(text: $workMinutes, onEditingChanged: { newValue in
+                        if let minutes = Int(newValue), minutes >= 0 {
+                            timerManager.workDurationMinutes = minutes
+                        }
+                    })
+                    .frame(width: 40)
+                    
+                    Text("分")
+                        .fixedSize()
+                    
+                    CustomTextField(text: $workSeconds, onEditingChanged: { newValue in
+                        if let seconds = Int(newValue), seconds >= 0 && seconds < 60 {
+                            timerManager.workDurationSeconds = seconds
+                        }
+                    })
+                    .frame(width: 40)
+                    
+                    Text("秒")
+                        .fixedSize()
                 }
                 .padding(.vertical, 5)
                 
-                HStack(alignment: .center) {
+                HStack {
                     Text("休息时长")
                         .frame(width: 80, alignment: .leading)
                     
                     Spacer()
                     
-                    HStack(spacing: 4) {
-                        TextField("", text: $breakMinutes)
-                            .frame(width: 40)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .multilineTextAlignment(.trailing)
-                            .onChange(of: breakMinutes) { newValue in
-                                if let minutes = Int(newValue), minutes >= 0 {
-                                    timerManager.breakDurationMinutes = minutes
-                                }
-                            }
-                        Text("分")
-                            .frame(height: 22)
-                        
-                        TextField("", text: $breakSeconds)
-                            .frame(width: 40)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .multilineTextAlignment(.trailing)
-                            .onChange(of: breakSeconds) { newValue in
-                                if let seconds = Int(newValue), seconds >= 0 && seconds < 60 {
-                                    timerManager.breakDurationSeconds = seconds
-                                }
-                            }
-                        Text("秒")
-                            .frame(height: 22)
-                    }
+                    CustomTextField(text: $breakMinutes, onEditingChanged: { newValue in
+                        if let minutes = Int(newValue), minutes >= 0 {
+                            timerManager.breakDurationMinutes = minutes
+                        }
+                    })
+                    .frame(width: 40)
+                    
+                    Text("分")
+                        .fixedSize()
+                    
+                    CustomTextField(text: $breakSeconds, onEditingChanged: { newValue in
+                        if let seconds = Int(newValue), seconds >= 0 && seconds < 60 {
+                            timerManager.breakDurationSeconds = seconds
+                        }
+                    })
+                    .frame(width: 40)
+                    
+                    Text("秒")
+                        .fixedSize()
                 }
                 .padding(.vertical, 5)
             }
@@ -130,6 +118,45 @@ struct SettingsView: View {
             }
         } else {
             _ = SMLoginItemSetEnabled("fxzer.top.RestTimer" as CFString, enabled)
+        }
+    }
+}
+
+// 自定义 TextField 组件
+struct CustomTextField: NSViewRepresentable {
+    @Binding var text: String
+    var onEditingChanged: (String) -> Void
+    
+    func makeNSView(context: Context) -> NSTextField {
+        let textField = NSTextField()
+        textField.delegate = context.coordinator
+        textField.alignment = .right
+        textField.bezelStyle = .roundedBezel
+        textField.font = .systemFont(ofSize: NSFont.systemFontSize)
+        textField.controlSize = .regular
+        return textField
+    }
+    
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        nsView.stringValue = text
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: CustomTextField
+        
+        init(_ parent: CustomTextField) {
+            self.parent = parent
+        }
+        
+        func controlTextDidChange(_ obj: Notification) {
+            if let textField = obj.object as? NSTextField {
+                parent.text = textField.stringValue
+                parent.onEditingChanged(textField.stringValue)
+            }
         }
     }
 }
