@@ -16,6 +16,7 @@
 		C3E3E32B2D03F1F300A0A60D /* RestTimerUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E3E32A2D03F1F300A0A60D /* RestTimerUITestsLaunchTests.swift */; };
 		C3E3E3382D03F26500A0A60D /* TimerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E3E3372D03F26500A0A60D /* TimerManager.swift */; };
 		C3E3E33A2D03F28000A0A60D /* BreakView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E3E3392D03F28000A0A60D /* BreakView.swift */; };
+		C3E3E33C2D03FF7E00A0A60D /* StatusBarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E3E33B2D03FF7E00A0A60D /* StatusBarManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -49,6 +50,7 @@
 		C3E3E32A2D03F1F300A0A60D /* RestTimerUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestTimerUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		C3E3E3372D03F26500A0A60D /* TimerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerManager.swift; sourceTree = "<group>"; };
 		C3E3E3392D03F28000A0A60D /* BreakView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakView.swift; sourceTree = "<group>"; };
+		C3E3E33B2D03FF7E00A0A60D /* StatusBarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -103,6 +105,7 @@
 				C3E3E30E2D03F1F200A0A60D /* ContentView.swift */,
 				C3E3E3372D03F26500A0A60D /* TimerManager.swift */,
 				C3E3E3392D03F28000A0A60D /* BreakView.swift */,
+				C3E3E33B2D03FF7E00A0A60D /* StatusBarManager.swift */,
 				C3E3E3102D03F1F300A0A60D /* Assets.xcassets */,
 				C3E3E3122D03F1F300A0A60D /* RestTimer.entitlements */,
 				C3E3E3132D03F1F300A0A60D /* Preview Content */,
@@ -266,6 +269,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C3E3E3382D03F26500A0A60D /* TimerManager.swift in Sources */,
+				C3E3E33C2D03FF7E00A0A60D /* StatusBarManager.swift in Sources */,
 				C3E3E30F2D03F1F200A0A60D /* ContentView.swift in Sources */,
 				C3E3E33A2D03F28000A0A60D /* BreakView.swift in Sources */,
 				C3E3E30D2D03F1F200A0A60D /* RestTimerApp.swift in Sources */,

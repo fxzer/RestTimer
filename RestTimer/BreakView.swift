@@ -13,10 +13,12 @@ struct BreakView: View {
                 .font(.title)
                 .foregroundColor(.white)
             
-            Button("跳过休息") {
-                timerManager.skipBreak()
+            if timerManager.showSkipButton {
+                Button("跳过休息") {
+                    timerManager.skipBreak()
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
