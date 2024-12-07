@@ -9,12 +9,19 @@ internal class TimerManager: ObservableObject {
     @Published var remainingBreakTime: TimeInterval = 0
     @Published var showSkipButton: Bool = false  // 默认不显示跳过按钮
     @Published var lastWorkStartTime: TimeInterval = Date().timeIntervalSince1970
-    @Published var workDurationMinutes: Int = 25
-    @Published var workDurationSeconds: Int = 0
-    @Published var breakDurationMinutes: Int = 5
-    @Published var breakDurationSeconds: Int = 0
-    @Published var earlyNotifyMinutes: Int = 2
-    @Published var earlyNotifySeconds: Int = 0
+    // @Published var workDurationMinutes: Int = 25
+    // @Published var workDurationSeconds: Int = 0
+    // @Published var breakDurationMinutes: Int = 5
+    // @Published var breakDurationSeconds: Int = 0
+    // @Published var earlyNotifyMinutes: Int = 2
+    // @Published var earlyNotifySeconds: Int = 0
+    @Published var workDurationMinutes: Int = 0
+    @Published var workDurationSeconds: Int = 10
+    @Published var breakDurationMinutes: Int = 0
+    @Published var breakDurationSeconds: Int = 3
+    @Published var earlyNotifyMinutes: Int = 0
+    @Published var earlyNotifySeconds: Int = 6
+    @Published var preventQuit: Bool = false
   
   
     private var workTimer: Timer?
@@ -75,6 +82,8 @@ internal class TimerManager: ObservableObject {
         
         // 重新开始工作定时器
         startWorkTimer()
+        
+        preventQuit = false
     }
     
     private func startBreak() {
@@ -112,6 +121,8 @@ internal class TimerManager: ObservableObject {
                 }
             }
         }
+        
+        preventQuit = true
     }
     
     private func startWorkTimer() {

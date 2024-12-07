@@ -67,9 +67,10 @@ class StatusBarManager: NSObject, ObservableObject {
         menu.addItem(NSMenuItem.separator())
         let quitItem = NSMenuItem(
             title: "退出",
-            action: #selector(NSApplication.terminate(_:)),
+            action: #selector(handleQuit),
             keyEquivalent: "q"
         )
+        quitItem.target = self
         menu.addItem(quitItem)
         
         statusItem?.menu = menu
@@ -152,6 +153,13 @@ class StatusBarManager: NSObject, ObservableObject {
     
     @objc private func showSettings() {
         WindowManager.shared.showSettings(timerManager: timerManager)
+    }
+    
+    @objc private func handleQuit() {
+        if timerManager.preventQuit {
+            return
+        }
+        NSApplication.shared.terminate(nil)
     }
     
     deinit {
