@@ -8,8 +8,8 @@ class StatusBarManager: NSObject, ObservableObject {
     private var updateTimer: Timer?
     private var buttonUpdateTimer: Timer?
     
-    override init() {
-        self.timerManager = TimerManager.shared
+    init(timerManager: TimerManager) {
+        self.timerManager = timerManager
         super.init()
         setupStatusBar()
         
@@ -44,39 +44,13 @@ class StatusBarManager: NSObject, ObservableObject {
     private func setupMenu() {
         let menu = NSMenu()
         
-        // 设置子菜单
-        let settingsMenu = NSMenu()
-        let settingsItem = NSMenuItem(title: "设置", action: nil, keyEquivalent: "")
-        settingsItem.submenu = settingsMenu
-        
-        // 开机自启动选项
-        let launchAtLoginItem = NSMenuItem(
-            title: "开机自启动",
-            action: #selector(toggleLaunchAtLogin),
-            keyEquivalent: ""
+        // 设置选项
+        let settingsItem = NSMenuItem(
+            title: "设置",
+            action: #selector(showSettings),
+            keyEquivalent: ","
         )
-        launchAtLoginItem.target = self
-        
-        // 默认设置为启用状态
-        if #available(macOS 13.0, *) {
-            launchAtLoginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
-        } else {
-            // 旧版本 API 无法检查状态，但由于我们在 init 中已经启用了，所以这里直接设置为 .on
-            launchAtLoginItem.state = .on
-        }
-        
-        settingsMenu.addItem(launchAtLoginItem)
-        
-        // 显示跳过按钮选项
-        let showSkipButtonItem = NSMenuItem(
-            title: "显示跳过按钮",
-            action: #selector(toggleShowSkipButton(_:)),
-            keyEquivalent: ""
-        )
-        showSkipButtonItem.target = self
-        showSkipButtonItem.state = timerManager.showSkipButton ? .on : .off
-        settingsMenu.addItem(showSkipButtonItem)
-        
+        settingsItem.target = self
         menu.addItem(settingsItem)
         
         // 关于选项
@@ -99,8 +73,7 @@ class StatusBarManager: NSObject, ObservableObject {
         menu.addItem(quitItem)
         
         statusItem?.menu = menu
-    }
-    
+    }    
     private func startButtonUpdateTimer() {
         stopButtonUpdateTimer()
         buttonUpdateTimer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -177,7 +150,68 @@ class StatusBarManager: NSObject, ObservableObject {
         }
     }
     
+    @objc private func showSettings() {
+        WindowManager.shared.showSettings(timerManager: timerManager)
+    }
+    
     deinit {
-        stopButtonUpdateTimer()
+        NotificationCenter.default.removeObserver(self)
+        buttonUpdateTimer?.invalidate()
+    }
+}
+
+class WindowManager: ObservableObject {
+    static let shared = WindowManager()
+    @Published var isSettingsWindowVisible = false
+    private var settingsWindow: NSWindow?
+    
+    private init() {}
+    
+    func showSettings(timerManager: TimerManager) {
+        if let existingWindow = settingsWindow {
+            existingWindow.makeKeyAndOrderFront(nil)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            return
+        }
+        
+        let controller = NSHostingController(
+            rootView: SettingsView()
+                .environmentObject(timerManager)
+        )
+        
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        
+        window.title = "设置"
+        window.contentViewController = controller
+        window.center()
+        
+        // 设置窗口关闭回调
+        window.isReleasedWhenClosed = false
+        window.delegate = WindowDelegate.shared
+        
+        settingsWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+    
+    func closeSettings() {
+        settingsWindow?.close()
+        settingsWindow = nil
+    }
+}
+
+// 窗口代理类
+class WindowDelegate: NSObject, NSWindowDelegate {
+    static let shared = WindowDelegate()
+    
+    func windowWillClose(_ notification: Notification) {
+        if let window = notification.object as? NSWindow {
+            WindowManager.shared.closeSettings()
+        }
     }
 }
