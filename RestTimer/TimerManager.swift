@@ -12,7 +12,7 @@ internal class TimerManager: ObservableObject {
     
     private var workTimer: Timer?
     private var breakTimer: Timer?
-    private var breakWindow: NSWindow?
+    private var breakWindows: [NSWindow] = [] // 添加数组来存储所有显示器的休息窗口
     //   let workDuration: TimeInterval = 25 * 60 // 25分钟
     // let breakDuration: TimeInterval = 5 * 60  // 5分钟
     let workDuration: TimeInterval = 5  // 5秒
@@ -47,11 +47,11 @@ internal class TimerManager: ObservableObject {
         breakTimer?.invalidate()
         breakTimer = nil
         
-        // 关闭窗口
-        if let window = breakWindow {
+        // 关闭所有休息窗口
+        breakWindows.forEach { window in
             window.orderOut(nil)
-            breakWindow = nil
         }
+        breakWindows.removeAll()
         
         // 重置状态
         isBreakTime = false
@@ -129,7 +129,7 @@ internal class TimerManager: ObservableObject {
             return
         }
         
-        // ��果已有通知窗口，先关闭它
+        // 果已有通知窗口，先关闭它
         if let existingWindow = notificationWindow {
             existingWindow.close()
             notificationWindow = nil
@@ -209,29 +209,44 @@ internal class TimerManager: ObservableObject {
     }
     
     private func createAndShowBreakWindow() {
-        guard let screen = NSScreen.main else { return }
+        // 清理现有的窗口
+        breakWindows.forEach { window in
+            window.orderOut(nil)
+        }
+        breakWindows.removeAll()
         
-        let window = NSWindow(
-            contentRect: screen.frame,
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
+        // 为每个屏幕创建休息窗口
+        for screen in NSScreen.screens {
+            let window = NSWindow(
+                contentRect: screen.frame,
+                styleMask: [.borderless],
+                backing: .buffered,
+                defer: false
+            )
+            
+            window.level = .screenSaver
+            window.backgroundColor = NSColor.black.withAlphaComponent(0.7)
+            window.isOpaque = false
+            window.hasShadow = false
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            window.acceptsMouseMovedEvents = true
+            
+            // 创建休息视图
+            let breakView = BreakView()
+                .environmentObject(self)
+            window.contentView = NSHostingView(rootView: breakView)
+            
+            // 设置窗口位置到对应屏幕
+            window.setFrame(screen.frame, display: true)
+            
+            // 保存窗口引用
+            breakWindows.append(window)
+            
+            // 显示窗口
+            window.makeKeyAndOrderFront(nil)
+        }
         
-        window.level = .screenSaver
-        window.backgroundColor = NSColor.black.withAlphaComponent(0.7)
-        window.isOpaque = false
-        window.hasShadow = false
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window.acceptsMouseMovedEvents = true
-        
-        let breakView = BreakView()
-            .environmentObject(self)
-        window.contentView = NSHostingView(rootView: breakView)
-        
-        breakWindow = window
-        
-        window.makeKeyAndOrderFront(nil)
+        // 激活应用
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
     
