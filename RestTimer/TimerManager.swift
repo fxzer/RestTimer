@@ -9,14 +9,23 @@ internal class TimerManager: ObservableObject {
     @Published var remainingBreakTime: TimeInterval = 0
     @Published var showSkipButton: Bool = false  // 默认不显示跳过按钮
     @Published var lastWorkStartTime: TimeInterval = Date().timeIntervalSince1970
+    @Published var workDurationMinutes: Int = 25
+    @Published var workDurationSeconds: Int = 0
+    @Published var breakDurationMinutes: Int = 5
+    @Published var breakDurationSeconds: Int = 0
     
     private var workTimer: Timer?
     private var breakTimer: Timer?
     private var breakWindows: [NSWindow] = [] // 添加数组来存储所有显示器的休息窗口
-      let workDuration: TimeInterval = 25 * 60 // 25分钟
-    // let breakDuration: TimeInterval = 5 * 60  // 5分钟
-    // let workDuration: TimeInterval = 35  // 5秒
-    let breakDuration: TimeInterval = 3  // 3秒
+    
+    // 计算属性
+    var workDuration: TimeInterval {
+        TimeInterval(workDurationMinutes * 60 + workDurationSeconds)
+    }
+    
+    var breakDuration: TimeInterval {
+        TimeInterval(breakDurationMinutes * 60 + breakDurationSeconds)
+    }
     
     // 添加一个属性来保持对通知窗口的引用
     private var notificationWindow: NSWindow?
