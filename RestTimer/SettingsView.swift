@@ -149,7 +149,7 @@ struct SettingsView: View {
                 .padding()
        
         }
-        .frame(width: 400, height: 400)
+        .frame(width: 400, height: 340)
     }
     
     private func toggleLaunchAtLogin(enabled: Bool) {

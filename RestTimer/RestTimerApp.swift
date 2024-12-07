@@ -12,8 +12,16 @@ struct RestTimerApp: App {
     }
     
     var body: some Scene {
-        Settings {
+        WindowGroup {
             EmptyView()
+        }
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("设置") {
+                    WindowManager.shared.showSettings(timerManager: timerManager)
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
         }
     }
 }
