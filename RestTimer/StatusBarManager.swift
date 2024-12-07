@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import ServiceManagement
 
 class StatusBarManager: NSObject, ObservableObject {
     private var statusItem: NSStatusItem?
@@ -11,6 +12,20 @@ class StatusBarManager: NSObject, ObservableObject {
         self.timerManager = TimerManager.shared
         super.init()
         setupStatusBar()
+        
+        // 默认启用开机自启动
+        if #available(macOS 13.0, *) {
+            if SMAppService.mainApp.status != .enabled {
+                do {
+                    try SMAppService.mainApp.register()
+                } catch {
+                    print("启用开机自启动失败: \(error)")
+                }
+            }
+        } else {
+            // 旧版本 API
+            _ = SMLoginItemSetEnabled("fxzer.top.RestTimer" as CFString, true)
+        }
     }
     
     private func setupStatusBar() {
@@ -41,6 +56,15 @@ class StatusBarManager: NSObject, ObservableObject {
             keyEquivalent: ""
         )
         launchAtLoginItem.target = self
+        
+        // 默认设置为启用状态
+        if #available(macOS 13.0, *) {
+            launchAtLoginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        } else {
+            // 旧版本 API 无法检查状态，但由于我们在 init 中已经启用了，所以这里直接设置为 .on
+            launchAtLoginItem.state = .on
+        }
+        
         settingsMenu.addItem(launchAtLoginItem)
         
         // 显示跳过按钮选项
@@ -104,8 +128,22 @@ class StatusBarManager: NSObject, ObservableObject {
     }
     
     @objc private func toggleLaunchAtLogin(_ sender: NSMenuItem) {
-        sender.state = sender.state == .on ? .off : .on
-        // TODO: 实现开机自启动功能
+        let isEnabled = sender.state == .on
+        
+        if #available(macOS 13.0, *) {
+            // 使用新的 API
+            do {
+                try SMAppService.mainApp.register()
+                sender.state = .on
+            } catch {
+                print("启用开机自启动失败: \(error)")
+                sender.state = .off
+            }
+        } else {
+            // 使用旧的 API
+            let success = SMLoginItemSetEnabled("fxzer.top.RestTimer" as CFString, !isEnabled)
+            sender.state = success ? (isEnabled ? .off : .on) : sender.state
+        }
     }
     
     @objc private func toggleShowSkipButton(_ sender: NSMenuItem) {

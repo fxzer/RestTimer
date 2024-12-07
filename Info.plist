@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 基本应用信息 -->
+    <key>CFBundleIdentifier</key>
+    <string>com.yourcompany.RestTimer</string>
+    <key>CFBundleName</key>
+    <string>RestTimer</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+    
+    <!-- 添加辅助功能权限声明 -->
+    <key>NSAppleEventsUsageDescription</key>
+    <string>需要此权限来锁定屏幕以保护您的休息时间</string>
+    
+    <!-- 添加辅助功能访问权限 -->
+    <key>Privacy - Accessibility Usage Description</key>
+    <string>需要辅助功能权限来锁定屏幕</string>
+    
+    <!-- 添加 Apple Events 权限 -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+    
+    <!-- 添加辅助功能权限 -->
+    <key>com.apple.security.temporary-exception.apple-events</key>
+    <array>
+        <string>com.apple.systemevents</string>
+        <string>com.apple.loginwindow</string>
+    </array>
+    
+    <!-- 添加开机自启动权限 -->
+    <key>NSAppleEventsUsageDescription</key>
+    <string>需要此权限来管理开机自启动功能</string>
+</dict>
+</plist>
