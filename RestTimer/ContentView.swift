@@ -1,24 +1,15 @@
-//
-//  ContentView.swift
-//  RestTimer
-//
-//  Created by fxj on 2024/12/7.
-//
-
 import SwiftUI
 
 struct ContentView: View {
+    @StateObject private var timerManager = TimerManager.shared
+    
     var body: some View {
         VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+            if !timerManager.isBreakTime {
+                Text("专注工作中...")
+                    .font(.title)
+            }
         }
-        .padding()
+        .frame(width: 200, height: 100)
     }
-}
-
-#Preview {
-    ContentView()
 }
