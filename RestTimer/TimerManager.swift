@@ -286,4 +286,22 @@ internal class TimerManager: ObservableObject {
         // 3. 如果都没有，返回主屏幕
         return NSScreen.main
     }
+    
+    func resetWorkTimer() {
+        // 确保在主线程执行
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.resetWorkTimer()
+            }
+            return
+        }
+        
+        // 清理现有定时器
+        workTimer?.invalidate()
+        workTimer = nil
+        
+        // 重新开始工作定时器
+        lastWorkStartTime = Date().timeIntervalSince1970
+        startWorkTimer()
+    }
 }

@@ -52,6 +52,7 @@ struct SettingsView: View {
                     CustomTextField(text: $workMinutes, onEditingChanged: { newValue in
                         if let minutes = Int(newValue), minutes >= 0 {
                             timerManager.workDurationMinutes = minutes
+                             timerManager.resetWorkTimer() // 重置计时器
                         }
                     })
                     .frame(width: 40)
@@ -62,6 +63,7 @@ struct SettingsView: View {
                     CustomTextField(text: $workSeconds, onEditingChanged: { newValue in
                         if let seconds = Int(newValue), seconds >= 0 && seconds < 60 {
                             timerManager.workDurationSeconds = seconds
+                            timerManager.resetWorkTimer() // 重置计时器
                         }
                     })
                     .frame(width: 40)
@@ -123,6 +125,7 @@ struct SettingsView: View {
 }
 
 // 自定义 TextField 组件
+
 struct CustomTextField: NSViewRepresentable {
     @Binding var text: String
     var onEditingChanged: (String) -> Void
@@ -153,9 +156,28 @@ struct CustomTextField: NSViewRepresentable {
         }
         
         func controlTextDidChange(_ obj: Notification) {
+            guard let textField = obj.object as? NSTextField else { return }
+            
+            // 过滤非数字字符
+            let filtered = textField.stringValue.filter { "0123456789".contains($0) }
+            
+            // 限制为2位数
+            let truncated = String(filtered.prefix(2))
+            
+            // 如果处理后的字符串与原字符串不同，更新文本框
+            if truncated != textField.stringValue {
+                textField.stringValue = truncated
+            }
+            
+            // 更新绑定值和触发回调
+            parent.text = truncated
+            parent.onEditingChanged(truncated)
+        }
+        
+        // 在开始编辑时选中所有文本
+        func controlTextDidBeginEditing(_ obj: Notification) {
             if let textField = obj.object as? NSTextField {
-                parent.text = textField.stringValue
-                parent.onEditingChanged(textField.stringValue)
+                textField.currentEditor()?.selectAll(nil)
             }
         }
     }
