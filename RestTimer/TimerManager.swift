@@ -131,6 +131,15 @@ internal class TimerManager: ObservableObject {
         // 显示开始专注的通知
         showStartWorkNotification()
         
+        // 设置提前提醒的定时器
+        if earlyNotifyDuration > 0 {
+            let earlyNotifyDelay = workDuration - earlyNotifyDuration
+            Timer.scheduledTimer(withTimeInterval: earlyNotifyDelay, repeats: false) { [weak self] _ in
+                self?.showEarlyNotification()
+            }
+        }
+        
+        // 设置工作结束的定时器
         workTimer = Timer.scheduledTimer(withTimeInterval: workDuration, repeats: false) { [weak self] _ in
             self?.startBreak()
         }
@@ -316,5 +325,100 @@ internal class TimerManager: ObservableObject {
         let totalEarlySeconds = earlyNotifyMinutes * 60 + earlyNotifySeconds
         let totalWorkSeconds = workDurationMinutes * 60 + workDurationSeconds
         return totalEarlySeconds < totalWorkSeconds
+    }
+    
+    private func showEarlyNotification() {
+        // 确保在主线程执行
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.showEarlyNotification()
+            }
+            return
+        }
+        
+        // 如果已有通知窗口，先关闭它
+        if let existingWindow = notificationWindow {
+            existingWindow.close()
+            notificationWindow = nil
+        }
+        
+        // 计算剩余时间
+        let remainingMinutes = Int(earlyNotifyDuration) / 60
+        let remainingSeconds = Int(earlyNotifyDuration) % 60
+        
+        // 创建并配置通知视图
+        let notificationContent = VStack {
+            Text("\(remainingMinutes)分\(remainingSeconds)秒后")
+                .font(.system(size: 30, weight: .bold))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .padding(.bottom, 10)
+            Text("将进入休息")
+                .font(.system(size: 30, weight: .bold))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+        }
+        .frame(width: 250, height: 150)
+        .background(Color.black.opacity(0.4))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        
+        // 使用 NSHostingController 来管理 SwiftUI 视图
+        let hostingController = NSHostingController(rootView: notificationContent)
+        hostingController.view.wantsLayer = true
+        
+        // 创建并配置窗口
+        let window = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        
+        // 配置窗口属性
+        window.contentViewController = hostingController
+        window.isOpaque = false
+        window.hasShadow = true
+        window.level = .statusBar
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.backgroundColor = .clear
+        window.ignoresMouseEvents = true
+        window.contentView?.appearance = NSAppearance(named: .vibrantDark)
+        
+        // 设置窗口圆角
+        window.contentView?.wantsLayer = true
+        window.contentView?.layer?.cornerRadius = 12
+        window.contentView?.layer?.masksToBounds = true
+        
+        // 获取当前活动屏幕
+        let activeScreen = getCurrentScreen()
+        
+        // 计算窗口位置（在当前活动屏幕居中）
+        if let screen = activeScreen {
+            let screenFrame = screen.visibleFrame
+            let x = screenFrame.minX + (screenFrame.width - window.frame.width) / 2
+            let y = screenFrame.minY + (screenFrame.height - window.frame.height) / 2
+            window.setFrameOrigin(NSPoint(x: x, y: y))
+        }
+        
+        // 保存窗口引用
+        notificationWindow = window
+        
+        // 显示窗口并设置自动关闭
+        window.orderFront(nil)
+        
+        // 3秒后关闭
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self = self else { return }
+            
+            if let window = self.notificationWindow {
+                NSAnimationContext.runAnimationGroup({ context in
+                    context.duration = 0.3
+                    window.animator().alphaValue = 0
+                }, completionHandler: { [weak self] in
+                    window.close()
+                    self?.notificationWindow = nil
+                })
+            }
+        }
     }
 }
