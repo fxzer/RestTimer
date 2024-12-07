@@ -189,19 +189,18 @@ class WindowManager: ObservableObject {
         window.title = "设置"
         window.contentViewController = controller
         window.center()
-        
-        // 设置窗口关闭回调
         window.isReleasedWhenClosed = false
         window.delegate = WindowDelegate.shared
         
         settingsWindow = window
         window.makeKeyAndOrderFront(nil)
         NSApplication.shared.activate(ignoringOtherApps: true)
+        isSettingsWindowVisible = true
     }
     
     func closeSettings() {
-        settingsWindow?.close()
-        settingsWindow = nil
+        settingsWindow?.orderOut(nil)  // 使用 orderOut 替代 close
+        isSettingsWindowVisible = false
     }
 }
 
@@ -209,9 +208,9 @@ class WindowManager: ObservableObject {
 class WindowDelegate: NSObject, NSWindowDelegate {
     static let shared = WindowDelegate()
     
-    func windowWillClose(_ notification: Notification) {
-        if let window = notification.object as? NSWindow {
-            WindowManager.shared.closeSettings()
-        }
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        // 不直接关闭窗口，而是隐藏它
+        WindowManager.shared.closeSettings()
+        return false // 返回 false 防止窗口被销毁
     }
 }
