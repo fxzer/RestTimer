@@ -6,11 +6,9 @@ struct RestTimerApp: App {
     @StateObject private var statusBarManager = StatusBarManager()
     
     var body: some Scene {
-        WindowGroup {
+        Settings {
             ContentView()
                 .environmentObject(timerManager)
         }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
     }
 }
