@@ -75,10 +75,26 @@ struct BreakView: View {
                 .padding()
             
             if timerManager.showSkipButton {
-                Button("跳过休息") {
+                Button(action: {
                     timerManager.skipBreak()
+                }) {
+                    Text("跳过休息")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(Color.black)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
                 }
-                .buttonStyle(.borderedProminent)
+                .background(
+                    Capsule()
+                        .fill(Color.white.opacity(0.9))
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
+                .padding(.top, 20)
+                .buttonStyle(CustomButtonStyle())
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -96,5 +112,15 @@ struct BreakView: View {
         } else {
             return "--:--"
         }
+    }
+}
+
+// 添加自定义按钮样式
+struct CustomButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.easeInOut(duration: 0.2), value: configuration.isPressed)
     }
 }

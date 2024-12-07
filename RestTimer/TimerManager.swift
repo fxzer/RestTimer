@@ -142,7 +142,7 @@ internal class TimerManager: ObservableObject {
                 .foregroundColor(.white)
         }
         .frame(width: 200, height: 200)
-        .background(Color.black.opacity(0.5))
+        .background(Color.black.opacity(0.4))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         
         // 使用 NSHostingController 来管理 SwiftUI 视图
