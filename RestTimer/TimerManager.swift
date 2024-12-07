@@ -7,15 +7,7 @@ internal class TimerManager: ObservableObject {
     
     @Published var isBreakTime = false
     @Published var remainingBreakTime: TimeInterval = 0
-    var showSkipButton: Bool {
-        get {
-            UserDefaults.standard.bool(forKey: "showSkipButton")
-        }
-        set {
-            UserDefaults.standard.set(newValue, forKey: "showSkipButton")
-            objectWillChange.send()
-        }
-    }
+    @Published var showSkipButton: Bool = false  // 默认不显示跳过按钮
     @Published var lastWorkStartTime: TimeInterval = Date().timeIntervalSince1970
     
     private var workTimer: Timer?

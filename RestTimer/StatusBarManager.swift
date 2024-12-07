@@ -46,10 +46,11 @@ class StatusBarManager: NSObject, ObservableObject {
         // 显示跳过按钮选项
         let showSkipButtonItem = NSMenuItem(
             title: "显示跳过按钮",
-            action: #selector(toggleShowSkipButton),
+            action: #selector(toggleShowSkipButton(_:)),
             keyEquivalent: ""
         )
         showSkipButtonItem.target = self
+        showSkipButtonItem.state = timerManager.showSkipButton ? .on : .off
         settingsMenu.addItem(showSkipButtonItem)
         
         menu.addItem(settingsItem)
@@ -109,7 +110,7 @@ class StatusBarManager: NSObject, ObservableObject {
     
     @objc private func toggleShowSkipButton(_ sender: NSMenuItem) {
         sender.state = sender.state == .on ? .off : .on
-        timerManager.showSkipButton = sender.state == .on
+        timerManager.showSkipButton = (sender.state == .on)
     }
     
     @objc private func showAbout() {
