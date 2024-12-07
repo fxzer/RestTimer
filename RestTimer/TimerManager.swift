@@ -172,7 +172,9 @@ internal class TimerManager: ObservableObject {
         window.level = .statusBar
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.backgroundColor = .clear
-        
+               // 添加以下两行代码来启用点击穿透
+        window.ignoresMouseEvents = true
+        window.contentView?.appearance = NSAppearance(named: .vibrantDark)
         // 设置窗口圆角
         window.contentView?.wantsLayer = true
         window.contentView?.layer?.cornerRadius = 12
