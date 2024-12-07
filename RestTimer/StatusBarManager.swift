@@ -1,12 +1,15 @@
 import SwiftUI
 import AppKit
 
-class StatusBarManager: ObservableObject {
+class StatusBarManager: NSObject, ObservableObject {
     private var statusItem: NSStatusItem?
     private var timerManager: TimerManager
+    private var updateTimer: Timer?
+    private var buttonUpdateTimer: Timer?
     
-    init() {
+    override init() {
         self.timerManager = TimerManager.shared
+        super.init()
         setupStatusBar()
     }
     
@@ -16,19 +19,15 @@ class StatusBarManager: ObservableObject {
             
             if let button = self?.statusItem?.button {
                 button.image = NSImage(systemSymbolName: "timer", accessibilityDescription: "Rest Timer")
+                self?.updateButtonDisplay()
                 self?.setupMenu()
+                self?.startButtonUpdateTimer()
             }
         }
     }
     
     private func setupMenu() {
         let menu = NSMenu()
-        
-        // 工作倒计时
-        let timerItem = NSMenuItem(title: "工作倒计时: --:--", action: nil, keyEquivalent: "")
-        menu.addItem(timerItem)
-        
-        menu.addItem(NSMenuItem.separator())
         
         // 设置子菜单
         let settingsMenu = NSMenu()
@@ -75,22 +74,30 @@ class StatusBarManager: ObservableObject {
         menu.addItem(quitItem)
         
         statusItem?.menu = menu
-        
-        // 开始定时更新倒计时显示
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.updateTimerDisplay()
-        }
     }
     
-    private func updateTimerDisplay() {
-        if let timerItem = statusItem?.menu?.item(at: 0) {
+    private func startButtonUpdateTimer() {
+        stopButtonUpdateTimer()
+        buttonUpdateTimer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.updateButtonDisplay()
+        }
+        RunLoop.main.add(buttonUpdateTimer!, forMode: .common)
+    }
+    
+    private func stopButtonUpdateTimer() {
+        buttonUpdateTimer?.invalidate()
+        buttonUpdateTimer = nil
+    }
+    
+    private func updateButtonDisplay() {
+        if let button = statusItem?.button {
             let remainingTime = Int(timerManager.workDuration - (Date().timeIntervalSince1970 - timerManager.lastWorkStartTime))
             if remainingTime > 0 {
                 let minutes = remainingTime / 60
                 let seconds = remainingTime % 60
-                timerItem.title = String(format: "工作倒计时: %02d:%02d", minutes, seconds)
+                button.title = String(format: "%02d:%02d", minutes, seconds)
             } else {
-                timerItem.title = "工作倒计时: --:--"
+                button.title = "--:--"
             }
         }
     }
@@ -129,5 +136,9 @@ class StatusBarManager: ObservableObject {
                 alert.runModal()
             }
         }
+    }
+    
+    deinit {
+        stopButtonUpdateTimer()
     }
 }
