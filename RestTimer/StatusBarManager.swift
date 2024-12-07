@@ -33,7 +33,9 @@ class StatusBarManager: NSObject, ObservableObject {
             self?.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
             
             if let button = self?.statusItem?.button {
-                button.image = NSImage(systemSymbolName: "timer", accessibilityDescription: "Rest Timer")
+                if let image = NSImage(systemSymbolName: "timer.circle", accessibilityDescription: "Rest Timer")?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 16, weight: .regular)) {
+                    button.image = image
+                }
                 self?.updateButtonDisplay()
                 self?.setupMenu()
                 self?.startButtonUpdateTimer()
@@ -101,20 +103,22 @@ class StatusBarManager: NSObject, ObservableObject {
     private func updateButtonDisplay() {
         if let button = statusItem?.button {
             if timerManager.isPaused {
-                // 暂停状态下只显示暂停图标，移除计时器图标
-                button.image = nil
+                if let pauseImage = NSImage(systemSymbolName: "pause.circle", accessibilityDescription: "Paused")?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 16, weight: .regular)) {
+                    button.image = pauseImage
+                }
                 if let pausedTime = timerManager.getRemainingPausedTime(),
                    pausedTime > 0 {
                     let remainingTime = Int(pausedTime)
                     let minutes = remainingTime / 60
                     let seconds = remainingTime % 60
-                    button.title = String(format: "⏸%02d:%02d", minutes, seconds)
+                    button.title = String(format: "%02d:%02d", minutes, seconds)
                 } else {
-                    button.title = "⏸--:--"
+                    button.title = "--:--"
                 }
             } else {
-                // 正常计时状态下显示计时器图标
-                button.image = NSImage(systemSymbolName: "timer", accessibilityDescription: "Rest Timer")
+                if let timerImage = NSImage(systemSymbolName: "timer.circle", accessibilityDescription: "Rest Timer")?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 16, weight: .regular)) {
+                    button.image = timerImage
+                }
                 let remainingTime = Int(timerManager.workDuration - (Date().timeIntervalSince1970 - timerManager.lastWorkStartTime))
                 if remainingTime > 0 {
                     let minutes = remainingTime / 60
@@ -123,6 +127,14 @@ class StatusBarManager: NSObject, ObservableObject {
                 } else {
                     button.title = "--:--"
                 }
+            }
+            
+            button.imagePosition = .imageLeft
+            button.imageScaling = .scaleProportionallyDown
+            
+            if let image = button.image {
+                image.size = NSSize(width: 16, height: 16)
+                button.image = image
             }
         }
     }
@@ -158,7 +170,7 @@ class StatusBarManager: NSObject, ObservableObject {
             版本: 1.0.0
             开发者: fxzer
             
-            一个简单的工休息提醒工具
+            一个简单的工休息提醒���具
             帮助你保持健康的工作节奏
             """
         alert.alertStyle = .informational
