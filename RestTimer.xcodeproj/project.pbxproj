@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		C338D3582D046D58004723B0 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C338D3572D046D58004723B0 /* SettingsView.swift */; };
 		C3E3E30D2D03F1F200A0A60D /* RestTimerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E3E30C2D03F1F200A0A60D /* RestTimerApp.swift */; };
-		C3E3E30F2D03F1F200A0A60D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E3E30E2D03F1F200A0A60D /* ContentView.swift */; };
 		C3E3E3112D03F1F300A0A60D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3E3E3102D03F1F300A0A60D /* Assets.xcassets */; };
 		C3E3E3152D03F1F300A0A60D /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3E3E3142D03F1F300A0A60D /* Preview Assets.xcassets */; };
 		C3E3E31F2D03F1F300A0A60D /* RestTimerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E3E31E2D03F1F300A0A60D /* RestTimerTests.swift */; };
@@ -41,7 +40,6 @@
 		C338D3572D046D58004723B0 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C3E3E3092D03F1F200A0A60D /* RestTimer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RestTimer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C3E3E30C2D03F1F200A0A60D /* RestTimerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestTimerApp.swift; sourceTree = "<group>"; };
-		C3E3E30E2D03F1F200A0A60D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		C3E3E3102D03F1F300A0A60D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C3E3E3122D03F1F300A0A60D /* RestTimer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RestTimer.entitlements; sourceTree = "<group>"; };
 		C3E3E3142D03F1F300A0A60D /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -104,7 +102,6 @@
 			isa = PBXGroup;
 			children = (
 				C3E3E30C2D03F1F200A0A60D /* RestTimerApp.swift */,
-				C3E3E30E2D03F1F200A0A60D /* ContentView.swift */,
 				C3E3E3372D03F26500A0A60D /* TimerManager.swift */,
 				C3E3E3392D03F28000A0A60D /* BreakView.swift */,
 				C3E3E33B2D03FF7E00A0A60D /* StatusBarManager.swift */,
@@ -273,7 +270,6 @@
 			files = (
 				C3E3E3382D03F26500A0A60D /* TimerManager.swift in Sources */,
 				C3E3E33C2D03FF7E00A0A60D /* StatusBarManager.swift in Sources */,
-				C3E3E30F2D03F1F200A0A60D /* ContentView.swift in Sources */,
 				C338D3582D046D58004723B0 /* SettingsView.swift in Sources */,
 				C3E3E33A2D03F28000A0A60D /* BreakView.swift in Sources */,
 				C3E3E30D2D03F1F200A0A60D /* RestTimerApp.swift in Sources */,
