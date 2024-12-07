@@ -80,19 +80,19 @@ struct BreakView: View {
                 }) {
                     Text("跳过休息")
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(Color.black)
+                        .foregroundColor(Color.black.opacity(0.8))
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
+                        .background(Capsule().fill(Color.white.opacity(0.9)))
+                        .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 1))
                 }
-                .background(
-                    Capsule()
-                        .fill(Color.white.opacity(0.9))
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                )
-                .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
+                .onHover { isHovered in
+                    if isHovered {
+                        NSCursor.pointingHand.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
                 .padding(.top, 20)
                 .buttonStyle(CustomButtonStyle())
             }
