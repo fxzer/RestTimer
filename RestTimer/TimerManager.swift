@@ -22,6 +22,8 @@ internal class TimerManager: ObservableObject {
     // @Published var earlyNotifyMinutes: Int = 0
     // @Published var earlyNotifySeconds: Int = 6
     @Published var preventQuit: Bool = false
+    @Published var isPaused: Bool = false
+    private var pausedTimeRemaining: TimeInterval?
   
   
     private var workTimer: Timer?
@@ -432,4 +434,22 @@ internal class TimerManager: ObservableObject {
             }
         }
     }
+    
+    func togglePause() {
+        isPaused.toggle()
+        if isPaused {
+            // 保存暂停时的剩余时间
+            pausedTimeRemaining = workDuration - (Date().timeIntervalSince1970 - lastWorkStartTime)
+        } else {
+            // 恢复计时，更新开始时间
+            if let remaining = pausedTimeRemaining {
+                lastWorkStartTime = Date().timeIntervalSince1970 - (workDuration - remaining)
+            }
+        }
+    }
+    
+    func getRemainingPausedTime() -> TimeInterval? {
+        return pausedTimeRemaining
+    }
 }
+

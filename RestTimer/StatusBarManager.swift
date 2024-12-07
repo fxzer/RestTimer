@@ -53,6 +53,16 @@ class StatusBarManager: NSObject, ObservableObject {
         settingsItem.target = self
         menu.addItem(settingsItem)
         
+        // 添加暂停/开始选项
+        menu.addItem(NSMenuItem.separator())
+        let pauseItem = NSMenuItem(
+            title: "暂停",
+            action: #selector(togglePause),
+            keyEquivalent: "p"
+        )
+        pauseItem.target = self
+        menu.addItem(pauseItem)
+        
         // 关于选项
         menu.addItem(NSMenuItem.separator())
         let aboutItem = NSMenuItem(
@@ -90,13 +100,29 @@ class StatusBarManager: NSObject, ObservableObject {
     
     private func updateButtonDisplay() {
         if let button = statusItem?.button {
-            let remainingTime = Int(timerManager.workDuration - (Date().timeIntervalSince1970 - timerManager.lastWorkStartTime))
-            if remainingTime > 0 {
-                let minutes = remainingTime / 60
-                let seconds = remainingTime % 60
-                button.title = String(format: "%02d:%02d", minutes, seconds)
+            if timerManager.isPaused {
+                // 暂停状态下只显示暂停图标，移除计时器图标
+                button.image = nil
+                if let pausedTime = timerManager.getRemainingPausedTime(),
+                   pausedTime > 0 {
+                    let remainingTime = Int(pausedTime)
+                    let minutes = remainingTime / 60
+                    let seconds = remainingTime % 60
+                    button.title = String(format: "⏸%02d:%02d", minutes, seconds)
+                } else {
+                    button.title = "⏸--:--"
+                }
             } else {
-                button.title = "--:--"
+                // 正常计时状态下显示计时器图标
+                button.image = NSImage(systemSymbolName: "timer", accessibilityDescription: "Rest Timer")
+                let remainingTime = Int(timerManager.workDuration - (Date().timeIntervalSince1970 - timerManager.lastWorkStartTime))
+                if remainingTime > 0 {
+                    let minutes = remainingTime / 60
+                    let seconds = remainingTime % 60
+                    button.title = String(format: "%02d:%02d", minutes, seconds)
+                } else {
+                    button.title = "--:--"
+                }
             }
         }
     }
@@ -132,7 +158,7 @@ class StatusBarManager: NSObject, ObservableObject {
             版本: 1.0.0
             开发者: fxzer
             
-            一个简单的工作休息提醒工具
+            一个简单的工休息提醒工具
             帮助你保持健康的工作节奏
             """
         alert.alertStyle = .informational
@@ -160,6 +186,12 @@ class StatusBarManager: NSObject, ObservableObject {
             return
         }
         NSApplication.shared.terminate(nil)
+    }
+    
+    @objc private func togglePause(_ sender: NSMenuItem) {
+        timerManager.togglePause()
+        sender.title = timerManager.isPaused ? "继续" : "暂停"
+        updateButtonDisplay()
     }
     
     deinit {

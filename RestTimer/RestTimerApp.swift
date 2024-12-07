@@ -12,7 +12,7 @@ struct RestTimerApp: App {
     }
     
     var body: some Scene {
-        WindowGroup {
+        Settings {
             EmptyView()
         }
         .commands {
