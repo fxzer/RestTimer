@@ -117,6 +117,17 @@ class StatusBarManager: ObservableObject {
             """
         alert.alertStyle = .informational
         alert.addButton(withTitle: "确定")
-        alert.runModal()
+        
+        // 获取当前的关键窗口
+        if let window = NSApp.keyWindow {
+            // 以模态方式显示在当前窗口之上
+            alert.beginSheetModal(for: window) { _ in }
+        } else {
+            // 如果没有关键窗口，则以独立窗口方式显示
+            DispatchQueue.main.async {
+                NSApp.activate(ignoringOtherApps: true)
+                alert.runModal()
+            }
+        }
     }
 }
