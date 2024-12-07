@@ -13,9 +13,10 @@ internal class TimerManager: ObservableObject {
     private var workTimer: Timer?
     private var breakTimer: Timer?
     private var breakWindow: NSWindow?
-    
-    let workDuration: TimeInterval = 25 * 60 // 25分钟
-    let breakDuration: TimeInterval = 5 * 60  // 5分钟
+    //   let workDuration: TimeInterval = 25 * 60 // 25分钟
+    // let breakDuration: TimeInterval = 5 * 60  // 5分钟
+    let workDuration: TimeInterval = 5  // 5秒
+    let breakDuration: TimeInterval = 3  // 3秒
     
     private init() {
         // 延迟初始化定时器，确保 AppKit 已完全初始化
