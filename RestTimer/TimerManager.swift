@@ -129,7 +129,7 @@ internal class TimerManager: ObservableObject {
             return
         }
         
-        // 如果已有通知窗口，先关闭它
+        // ��果已有通知窗口，先关闭它
         if let existingWindow = notificationWindow {
             existingWindow.close()
             notificationWindow = nil
@@ -170,11 +170,14 @@ internal class TimerManager: ObservableObject {
         window.contentView?.layer?.cornerRadius = 12
         window.contentView?.layer?.masksToBounds = true
         
-        // 计算窗口位置（屏幕居中）
-        if let screen = NSScreen.main {
+        // 获取当前活动屏幕或鼠标所在屏幕
+        let activeScreen = getCurrentScreen()
+        
+        // 计算窗口位置（在当前活动屏幕居中）
+        if let screen = activeScreen {
             let screenFrame = screen.visibleFrame
-            let x = (screenFrame.width - window.frame.width) / 2
-            let y = (screenFrame.height - window.frame.height) / 2
+            let x = screenFrame.minX + (screenFrame.width - window.frame.width) / 2
+            let y = screenFrame.minY + (screenFrame.height - window.frame.height) / 2
             window.setFrameOrigin(NSPoint(x: x, y: y))
         }
         
@@ -234,5 +237,27 @@ internal class TimerManager: ObservableObject {
     
     deinit {
         cleanupAndEndBreak()
+    }
+    
+    // 添加获取当前活动屏幕的方法
+    private func getCurrentScreen() -> NSScreen? {
+        // 1. 首先尝试获取鼠标所在屏幕
+        let mouseLocation = NSEvent.mouseLocation
+        let mouseScreen = NSScreen.screens.first { screen in
+            screen.frame.contains(mouseLocation)
+        }
+        
+        if let screen = mouseScreen {
+            return screen
+        }
+        
+        // 2. 如果没有找到鼠标所在屏幕，尝试获取当前激活窗口所在屏幕
+        if let keyWindow = NSApp.keyWindow,
+           let windowScreen = keyWindow.screen {
+            return windowScreen
+        }
+        
+        // 3. 如果都没有，返回主屏幕
+        return NSScreen.main
     }
 }
