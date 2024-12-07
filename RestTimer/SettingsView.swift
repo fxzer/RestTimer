@@ -11,7 +11,11 @@ struct SettingsView: View {
     @State private var workSeconds: String
     @State private var breakMinutes: String
     @State private var breakSeconds: String
-    
+    @State private var earlyNotifyMinutes: String
+    @State private var earlyNotifySeconds: String
+    @State private var showAlert: Bool = false
+    @State private var alertMessage: String = ""  
+
     init() {
         _showSkipButton = State(initialValue: TimerManager.shared.showSkipButton)
         if #available(macOS 13.0, *) {
@@ -24,6 +28,8 @@ struct SettingsView: View {
         _workSeconds = State(initialValue: String(TimerManager.shared.workDurationSeconds))
         _breakMinutes = State(initialValue: String(TimerManager.shared.breakDurationMinutes))
         _breakSeconds = State(initialValue: String(TimerManager.shared.breakDurationSeconds))
+        _earlyNotifyMinutes = State(initialValue: String(TimerManager.shared.earlyNotifyMinutes))
+        _earlyNotifySeconds = State(initialValue: String(TimerManager.shared.earlyNotifySeconds))
     }
     
     var body: some View {
@@ -100,9 +106,48 @@ struct SettingsView: View {
                         .fixedSize()
                 }
                 .padding(.vertical, 5)
-            }
-            .formStyle(.grouped)
-            .padding()
+
+                     // 在 Form 中添加新的 HStack
+                HStack {
+                    Text("提前提醒")
+                        .frame(width: 80, alignment: .leading)
+                    
+                    Spacer()
+                    
+                    CustomTextField(text: $earlyNotifyMinutes, onEditingChanged: { newValue in
+                        if let minutes = Int(newValue), minutes >= 0 {
+                            timerManager.earlyNotifyMinutes = minutes
+                            validateEarlyNotifyDuration()
+                        }
+                    })
+                    .frame(width: 40)
+                    
+                    Text("分")
+                        .fixedSize()
+                    
+                    CustomTextField(text: $earlyNotifySeconds, onEditingChanged: { newValue in
+                        if let seconds = Int(newValue), seconds >= 0 && seconds < 60 {
+                            timerManager.earlyNotifySeconds = seconds
+                            validateEarlyNotifyDuration()
+                        }
+                    })
+                    .frame(width: 40)
+                    
+                    Text("秒")
+                        .fixedSize()
+                }
+                .padding(.vertical, 5)
+
+                // 添加警告提示
+                .alert("设置错误", isPresented: $showAlert) {
+                    Button("确定", role: .cancel) {}
+                } message: {
+                    Text(alertMessage)
+                }
+                }
+                .formStyle(.grouped)
+                .padding()
+       
         }
         .frame(width: 400, height: 400)
     }
@@ -122,6 +167,20 @@ struct SettingsView: View {
             _ = SMLoginItemSetEnabled("fxzer.top.RestTimer" as CFString, enabled)
         }
     }
+
+    // 添加验证方法
+    private func validateEarlyNotifyDuration() {
+        if !timerManager.isValidEarlyNotifyDuration() {
+            alertMessage = "提前提醒时长必须小于专注时长"
+            showAlert = true
+            // 重置为默认值
+            timerManager.earlyNotifyMinutes = 2
+            timerManager.earlyNotifySeconds = 0
+            earlyNotifyMinutes = "2"
+            earlyNotifySeconds = "0"
+        }
+    }
+
 }
 
 // 自定义 TextField 组件

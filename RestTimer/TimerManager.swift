@@ -13,7 +13,10 @@ internal class TimerManager: ObservableObject {
     @Published var workDurationSeconds: Int = 0
     @Published var breakDurationMinutes: Int = 5
     @Published var breakDurationSeconds: Int = 0
-    
+    @Published var earlyNotifyMinutes: Int = 2
+    @Published var earlyNotifySeconds: Int = 0
+  
+  
     private var workTimer: Timer?
     private var breakTimer: Timer?
     private var breakWindows: [NSWindow] = [] // 添加数组来存储所有显示器的休息窗口
@@ -25,6 +28,10 @@ internal class TimerManager: ObservableObject {
     
     var breakDuration: TimeInterval {
         TimeInterval(breakDurationMinutes * 60 + breakDurationSeconds)
+    }
+    
+    var earlyNotifyDuration: TimeInterval {
+        TimeInterval(earlyNotifyMinutes * 60 + earlyNotifySeconds)
     }
     
     // 添加一个属性来保持对通知窗口的引用
@@ -303,5 +310,11 @@ internal class TimerManager: ObservableObject {
         // 重新开始工作定时器
         lastWorkStartTime = Date().timeIntervalSince1970
         startWorkTimer()
+    }
+    
+    func isValidEarlyNotifyDuration() -> Bool {
+        let totalEarlySeconds = earlyNotifyMinutes * 60 + earlyNotifySeconds
+        let totalWorkSeconds = workDurationMinutes * 60 + workDurationSeconds
+        return totalEarlySeconds < totalWorkSeconds
     }
 }
