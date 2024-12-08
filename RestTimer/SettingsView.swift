@@ -100,35 +100,6 @@ struct SettingsView: View {
                 .padding(.vertical, 5)
                 
                 HStack {
-                    Text("休息时长")
-                        .frame(width: 80, alignment: .leading)
-                    
-                    Spacer()
-                    
-                    CustomTextField(text: $breakMinutes, onEditingChanged: { newValue in
-                        if let minutes = Int(newValue), minutes >= 0 {
-                            timerManager.breakDurationMinutes = minutes
-                        }
-                    })
-                    .frame(width: 40)
-                    
-                    Text("分")
-                        .fixedSize()
-                    
-                    CustomTextField(text: $breakSeconds, onEditingChanged: { newValue in
-                        if let seconds = Int(newValue), seconds >= 0 && seconds < 60 {
-                            timerManager.breakDurationSeconds = seconds
-                        }
-                    })
-                    .frame(width: 40)
-                    
-                    Text("秒")
-                        .fixedSize()
-                }
-                .padding(.vertical, 5)
-
-                     // 在 Form 中添加新的 HStack
-                HStack {
                     Text("提前提醒")
                         .frame(width: 80, alignment: .leading)
                     
@@ -149,6 +120,34 @@ struct SettingsView: View {
                         if let seconds = Int(newValue), seconds >= 0 && seconds < 60 {
                             timerManager.earlyNotifySeconds = seconds
                             validateEarlyNotifyDuration()
+                        }
+                    })
+                    .frame(width: 40)
+                    
+                    Text("秒")
+                        .fixedSize()
+                }
+                .padding(.vertical, 5)
+
+                HStack {
+                    Text("休息时长")
+                        .frame(width: 80, alignment: .leading)
+                    
+                    Spacer()
+                    
+                    CustomTextField(text: $breakMinutes, onEditingChanged: { newValue in
+                        if let minutes = Int(newValue), minutes >= 0 {
+                            timerManager.breakDurationMinutes = minutes
+                        }
+                    })
+                    .frame(width: 40)
+                    
+                    Text("分")
+                        .fixedSize()
+                    
+                    CustomTextField(text: $breakSeconds, onEditingChanged: { newValue in
+                        if let seconds = Int(newValue), seconds >= 0 && seconds < 60 {
+                            timerManager.breakDurationSeconds = seconds
                         }
                     })
                     .frame(width: 40)
