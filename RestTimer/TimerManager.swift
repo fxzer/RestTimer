@@ -331,7 +331,7 @@ internal class TimerManager: ObservableObject {
         }
         breakWindows.removeAll()
         
-        // 为每个幕创建休息窗口
+        // 为每个屏幕创建休息窗口
         for screen in NSScreen.screens {
             let window = NSWindow(
                 contentRect: screen.frame,
@@ -341,16 +341,33 @@ internal class TimerManager: ObservableObject {
             )
             
             window.level = .screenSaver
-            window.backgroundColor = NSColor.black.withAlphaComponent(0.95)
             window.isOpaque = false
             window.hasShadow = false
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             window.acceptsMouseMovedEvents = true
             
-            // 创建休息视图
+            // 创建一个视觉效果视图作为背景
+            let visualEffectView = NSVisualEffectView(frame: window.contentView?.bounds ?? .zero)
+            visualEffectView.material = .dark  // 可以尝试其他材质效果：.ultraDark, .light, .mediumLight 等
+            visualEffectView.blendingMode = .behindWindow
+            visualEffectView.state = .active
+            visualEffectView.wantsLayer = true
+            
+            // 添加半透明黑色背景层
+            let overlayView = NSView(frame: visualEffectView.bounds)
+            overlayView.wantsLayer = true
+            overlayView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
+            visualEffectView.addSubview(overlayView)
+            
+            // 创建并配置 SwiftUI 休息视图
             let breakView = BreakView()
                 .environmentObject(self)
-            window.contentView = NSHostingView(rootView: breakView)
+            let hostingView = NSHostingView(rootView: breakView)
+            hostingView.frame = visualEffectView.bounds
+            
+            // 组合视图层次
+            visualEffectView.addSubview(hostingView)
+            window.contentView = visualEffectView
             
             // 设置窗口位置到对应屏幕
             window.setFrame(screen.frame, display: true)

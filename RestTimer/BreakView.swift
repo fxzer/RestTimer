@@ -3,6 +3,9 @@ import SwiftUI
 struct BreakView: View {
     @EnvironmentObject var timerManager: TimerManager
     @State private var randomQuote: String = ""
+    @State private var currentTime = Date()
+    
+    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
     private let quotes = [
         "休息是为了走更远的路。 ——中国谚语",
@@ -60,11 +63,23 @@ struct BreakView: View {
     
     var body: some View {
         VStack(spacing: 40) {
+            // 显示当前时间
+            Text(currentTime.formatted(date: .omitted, time: .standard))
+                .font(.system(size: 40))
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+                .frame(width: 200)
+                .monospacedDigit()
+                .lineLimit(1)
+            
             // 仅显示倒计时
             Text(remainingTimeText())
-                .font(.system(size: 150)) // 字体调大
-                .fontWeight(.bold) // 字体加粗
+                .font(.system(size: 150))
+                .fontWeight(.bold)
                 .foregroundColor(.white)
+                .frame(width: 500)
+                .monospacedDigit()
+                .lineLimit(1)
             
             // 显示随机名言
             Text(randomQuote)
@@ -100,6 +115,9 @@ struct BreakView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             randomQuote = quotes.randomElement() ?? ""
+        }
+        .onReceive(timer) { input in
+            currentTime = input
         }
     }
     
