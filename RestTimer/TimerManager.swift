@@ -18,13 +18,33 @@ internal class TimerManager: ObservableObject {
     @Published var workDurationMinutes: Int = 25 {
         didSet {
             if oldValue != workDurationMinutes {
+                if !isValidWorkDuration() {
+                    let alert = NSAlert()
+                    alert.messageText = "专注时长必须大于提前提醒时长"
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "确认")
+                    alert.runModal()
+                } else {
+                    resetWorkTimer() // 只有在条件满足时才重置计时器
+                }
                 saveSettings()
             }
         }
     }
     @Published var workDurationSeconds: Int = 0 {
         didSet {
-            saveSettings()
+            if oldValue != workDurationSeconds {
+                if !isValidWorkDuration() {
+                    let alert = NSAlert()
+                    alert.messageText = "专注时长必须大于提前提醒时长"
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "确认")
+                    alert.runModal()
+                } else {
+                    resetWorkTimer() // 只有在条件满足时才重置计时器
+                }
+                saveSettings()
+            }
         }
     }
     @Published var breakDurationMinutes: Int = 5 {
@@ -355,7 +375,7 @@ internal class TimerManager: ObservableObject {
             return
         }
         
-        // 清理现有定时器
+        // 清理现有定��器
         workTimer?.invalidate()
         workTimer = nil
         
@@ -427,7 +447,7 @@ internal class TimerManager: ObservableObject {
         window.ignoresMouseEvents = true
         window.contentView?.appearance = NSAppearance(named: .vibrantDark)
         
-        // 设置窗口圆角
+        // ���置窗口圆角
         window.contentView?.wantsLayer = true
         window.contentView?.layer?.cornerRadius = 12
         window.contentView?.layer?.masksToBounds = true
@@ -526,6 +546,43 @@ internal class TimerManager: ObservableObject {
             saveSettings()
         }
     }
+    
+    private func validateAndAdjustEarlyNotify() {
+        let settings = TimerSettings(
+            showSkipButton: showSkipButton,
+            workDurationMinutes: workDurationMinutes,
+            workDurationSeconds: workDurationSeconds,
+            breakDurationMinutes: breakDurationMinutes,
+            breakDurationSeconds: breakDurationSeconds,
+            earlyNotifyMinutes: earlyNotifyMinutes,
+            earlyNotifySeconds: earlyNotifySeconds
+        )
+        
+        // 如果提前提醒时间大于等于专注时间
+        if settings.earlyNotifyTotalSeconds >= settings.workTotalSeconds {
+            // 将提前提醒时间设置为专注时间的一半或默认值(2分钟)取较小值
+            let halfWorkSeconds = settings.workTotalSeconds / 2
+            let defaultEarlyNotifySeconds = 2 * 60 // 2分钟
+            let newEarlyNotifySeconds = min(halfWorkSeconds, defaultEarlyNotifySeconds)
+            
+            earlyNotifyMinutes = newEarlyNotifySeconds / 60
+            earlyNotifySeconds = newEarlyNotifySeconds % 60
+            
+            // 通知用户设置已被调整
+            NotificationCenter.default.post(
+                name: NSNotification.Name("EarlyNotifyAdjusted"),
+                object: nil,
+                userInfo: ["message": "提前提醒时间已自动调整为\(earlyNotifyMinutes)分\(earlyNotifySeconds)秒"]
+            )
+        }
+    }
+    
+    // 添加一个验证方法
+    private func isValidWorkDuration() -> Bool {
+        let workTotalSeconds = workDurationMinutes * 60 + workDurationSeconds
+        let earlyNotifyTotalSeconds = earlyNotifyMinutes * 60 + earlyNotifySeconds
+        return workTotalSeconds > earlyNotifyTotalSeconds
+    }
 }
 
 private struct TimerSettings: Codable {
@@ -546,5 +603,18 @@ private struct TimerSettings: Codable {
         earlyNotifyMinutes: 2,
         earlyNotifySeconds: 0
     )
+    
+    // 添加一个计算总秒数的扩展方法
+    func totalSeconds(minutes: Int, seconds: Int) -> Int {
+        return minutes * 60 + seconds
+    }
+    
+    var workTotalSeconds: Int {
+        return totalSeconds(minutes: workDurationMinutes, seconds: workDurationSeconds)
+    }
+    
+    var earlyNotifyTotalSeconds: Int {
+        return totalSeconds(minutes: earlyNotifyMinutes, seconds: earlyNotifySeconds)
+    }
 }
 

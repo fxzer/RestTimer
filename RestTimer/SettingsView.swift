@@ -1,9 +1,33 @@
 import SwiftUI
 import ServiceManagement
 
+// 添加一个协调器类来处理通知
+class SettingsViewCoordinator: ObservableObject {
+    @Published var showAlert: Bool = false
+    @Published var alertMessage: String = ""
+    
+    init() {
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("EarlyNotifyAdjusted"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if let message = notification.userInfo?["message"] as? String {
+                self?.alertMessage = message
+                self?.showAlert = true
+            }
+        }
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+}
+
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var timerManager: TimerManager
+    @StateObject private var coordinator = SettingsViewCoordinator()
     @State private var showSkipButton: Bool
     @State private var launchAtLogin: Bool
     
@@ -13,9 +37,7 @@ struct SettingsView: View {
     @State private var breakSeconds: String
     @State private var earlyNotifyMinutes: String
     @State private var earlyNotifySeconds: String
-    @State private var showAlert: Bool = false
-    @State private var alertMessage: String = ""  
-
+    
     init() {
         _showSkipButton = State(initialValue: TimerManager.shared.showSkipButton)
         if #available(macOS 13.0, *) {
@@ -58,7 +80,6 @@ struct SettingsView: View {
                     CustomTextField(text: $workMinutes, onEditingChanged: { newValue in
                         if let minutes = Int(newValue), minutes >= 0 {
                             timerManager.workDurationMinutes = minutes
-                             timerManager.resetWorkTimer() // 重置计时器
                         }
                     })
                     .frame(width: 40)
@@ -69,7 +90,6 @@ struct SettingsView: View {
                     CustomTextField(text: $workSeconds, onEditingChanged: { newValue in
                         if let seconds = Int(newValue), seconds >= 0 && seconds < 60 {
                             timerManager.workDurationSeconds = seconds
-                            timerManager.resetWorkTimer() // 重置计时器
                         }
                     })
                     .frame(width: 40)
@@ -139,10 +159,12 @@ struct SettingsView: View {
                 .padding(.vertical, 5)
 
                 // 添加警告提示
-                .alert("设置错误", isPresented: $showAlert) {
-                    Button("确定", role: .cancel) {}
+                .alert("设置错误", isPresented: $coordinator.showAlert) {
+                    Button("确定", action: {})
+                        .buttonStyle(.borderedProminent)
+                        .tint(.blue)
                 } message: {
-                    Text(alertMessage)
+                    Text(coordinator.alertMessage)
                 }
                 }
                 .formStyle(.grouped)
@@ -171,8 +193,12 @@ struct SettingsView: View {
     // 添加验证方法
     private func validateEarlyNotifyDuration() {
         if !timerManager.isValidEarlyNotifyDuration() {
-            alertMessage = "提前提醒时长必须小于专注时长"
-            showAlert = true
+            let alert = NSAlert()
+            alert.messageText = "提前提醒时长必须小于专注时长"
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "确认")
+            alert.runModal()
+            
             // 重置为默认值
             timerManager.earlyNotifyMinutes = 2
             timerManager.earlyNotifySeconds = 0
