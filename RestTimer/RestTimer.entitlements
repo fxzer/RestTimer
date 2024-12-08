@@ -28,5 +28,7 @@
 	<true/>
 	<key>com.apple.security.personal-information.photos-library</key>
 	<true/>
+	<key>com.apple.security.temporary-exception.apple-events</key>
+	<true/>
 </dict>
 </plist>

@@ -98,6 +98,9 @@ internal class TimerManager: ObservableObject {
     // 添加一个标志来标识是否在初始化过程中
     private var isInitializing = true
     
+    // 添加 statusBarManager 属性
+    weak var statusBarManager: StatusBarManager?
+    
     private init() {
         isInitializing = true
         loadSettings()

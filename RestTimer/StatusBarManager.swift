@@ -11,6 +11,8 @@ class StatusBarManager: NSObject, ObservableObject {
     init(timerManager: TimerManager) {
         self.timerManager = timerManager
         super.init()
+        // 设置引用
+        timerManager.statusBarManager = self
         setupStatusBar()
         
         // 默认启用开机自启动
@@ -27,7 +29,17 @@ class StatusBarManager: NSObject, ObservableObject {
             _ = SMLoginItemSetEnabled("fxzer.top.RestTimer" as CFString, true)
         }
     }
-    
+   // 添加一个公共方法来更新暂停/继续菜单项
+  public func updatePauseMenuItem() {
+        guard let statusItem = statusItem,
+              let menu = statusItem.menu else { return }
+        
+        if let pauseMenuItem = menu.items.first(where: { $0.action == #selector(togglePause(_:)) }) {
+            pauseMenuItem.title = timerManager.isPaused ? "继续" : "暂停"
+        }
+        updateButtonDisplay()
+    }
+     
     private func setupStatusBar() {
         DispatchQueue.main.async { [weak self] in
             self?.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)

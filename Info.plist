@@ -42,5 +42,15 @@
     <!-- 添加应用图标 -->
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
+    
+    <!-- 添加系统锁屏状态检测权限 -->
+    <key>NSAppleEventsUsageDescription</key>
+    <string>需要此权限来检测系统锁屏状态</string>
+    
+    <!-- 添加系统锁屏状态异常权限 -->
+    <key>com.apple.security.temporary-exception.apple-events</key>
+    <array>
+        <string>com.apple.systemevents</string>
+    </array>
 </dict>
 </plist>
