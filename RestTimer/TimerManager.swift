@@ -341,7 +341,7 @@ internal class TimerManager: ObservableObject {
             )
             
             window.level = .screenSaver
-            window.backgroundColor = NSColor.black.withAlphaComponent(0.7)
+            window.backgroundColor = NSColor.black.withAlphaComponent(0.95)
             window.isOpaque = false
             window.hasShadow = false
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]

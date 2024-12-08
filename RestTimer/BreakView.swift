@@ -80,11 +80,11 @@ struct BreakView: View {
                 }) {
                     Text("跳过休息")
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(Color.black.opacity(0.8))
+                        .foregroundColor(Color.black)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
-                        .background(Capsule().fill(Color.white.opacity(0.9)))
-                        .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 1))
+                        .background(Capsule().fill(Color.white))
+                        .overlay(Capsule().stroke(Color.white, lineWidth: 1))
                 }
                 .onHover { isHovered in
                     if isHovered {
