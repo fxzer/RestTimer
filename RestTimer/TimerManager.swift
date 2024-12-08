@@ -7,20 +7,46 @@ internal class TimerManager: ObservableObject {
     
     @Published var isBreakTime = false
     @Published var remainingBreakTime: TimeInterval = 0
-    @Published var showSkipButton: Bool = false  // 默认不显示跳过按钮
+    @Published var showSkipButton: Bool = false {
+        didSet {
+            if oldValue != showSkipButton {
+                saveSettings()
+            }
+        }
+    }
     @Published var lastWorkStartTime: TimeInterval = Date().timeIntervalSince1970
-    @Published var workDurationMinutes: Int = 25
-    @Published var workDurationSeconds: Int = 0
-    @Published var breakDurationMinutes: Int = 5
-    @Published var breakDurationSeconds: Int = 0
-    @Published var earlyNotifyMinutes: Int = 2
-    @Published var earlyNotifySeconds: Int = 0
-    // @Published var workDurationMinutes: Int = 0
-    // @Published var workDurationSeconds: Int = 10
-    // @Published var breakDurationMinutes: Int = 0
-    // @Published var breakDurationSeconds: Int = 3
-    // @Published var earlyNotifyMinutes: Int = 0
-    // @Published var earlyNotifySeconds: Int = 6
+    @Published var workDurationMinutes: Int = 25 {
+        didSet {
+            if oldValue != workDurationMinutes {
+                saveSettings()
+            }
+        }
+    }
+    @Published var workDurationSeconds: Int = 0 {
+        didSet {
+            saveSettings()
+        }
+    }
+    @Published var breakDurationMinutes: Int = 5 {
+        didSet {
+            saveSettings()
+        }
+    }
+    @Published var breakDurationSeconds: Int = 0 {
+        didSet {
+            saveSettings()
+        }
+    }
+    @Published var earlyNotifyMinutes: Int = 2 {
+        didSet {
+            saveSettings()
+        }
+    }
+    @Published var earlyNotifySeconds: Int = 0 {
+        didSet {
+            saveSettings()
+        }
+    }
     @Published var preventQuit: Bool = false
     @Published var isPaused: Bool = false
     private var pausedTimeRemaining: TimeInterval?
@@ -46,7 +72,11 @@ internal class TimerManager: ObservableObject {
     // 添加一个属性来保持对通知窗口的引用
     private var notificationWindow: NSWindow?
     
+    private let defaults = UserDefaults.standard
+    
     private init() {
+        loadSettings()
+        
         // 延迟初始化定时器，确保 AppKit 已完全初始化
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.startWorkTimer()
@@ -104,7 +134,7 @@ internal class TimerManager: ObservableObject {
         isBreakTime = true
         remainingBreakTime = breakDuration
         
-        // 创建并显示窗口
+        // 建并显示窗口
         createAndShowBreakWindow()
         
         // 创建新的定时器
@@ -255,7 +285,7 @@ internal class TimerManager: ObservableObject {
         }
         breakWindows.removeAll()
         
-        // 为每个屏幕创建休息窗口
+        // 为每个幕创建休息窗口
         for screen in NSScreen.screens {
             let window = NSWindow(
                 contentRect: screen.frame,
@@ -341,7 +371,7 @@ internal class TimerManager: ObservableObject {
     }
     
     private func showEarlyNotification() {
-        // 确保在主线程执行
+        // 确保在线程执行
         guard Thread.isMainThread else {
             DispatchQueue.main.async { [weak self] in
                 self?.showEarlyNotification()
@@ -375,7 +405,7 @@ internal class TimerManager: ObservableObject {
         .background(Color.black.opacity(0.4))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         
-        // 使用 NSHostingController 来管理 SwiftUI 视图
+        // 使用 NSHostingController 管理 SwiftUI 视图
         let hostingController = NSHostingController(rootView: notificationContent)
         hostingController.view.wantsLayer = true
         
@@ -451,5 +481,70 @@ internal class TimerManager: ObservableObject {
     func getRemainingPausedTime() -> TimeInterval? {
         return pausedTimeRemaining
     }
+    
+    private func saveSettings() {
+        let settings = TimerSettings(
+            showSkipButton: showSkipButton,
+            workDurationMinutes: workDurationMinutes,
+            workDurationSeconds: workDurationSeconds,
+            breakDurationMinutes: breakDurationMinutes,
+            breakDurationSeconds: breakDurationSeconds,
+            earlyNotifyMinutes: earlyNotifyMinutes,
+            earlyNotifySeconds: earlyNotifySeconds
+        )
+        
+        if let encoded = try? JSONEncoder().encode(settings) {
+            UserDefaults.standard.set(encoded, forKey: "TimerSettings")
+            UserDefaults.standard.synchronize()
+        }
+    }
+    
+    private func loadSettings() {
+        // 尝试读取持久化的设置
+        if let data = UserDefaults.standard.data(forKey: "TimerSettings"),
+           let settings = try? JSONDecoder().decode(TimerSettings.self, from: data) {
+            // 如果有保存的设置，使用保存的值
+            showSkipButton = settings.showSkipButton
+            workDurationMinutes = settings.workDurationMinutes
+            workDurationSeconds = settings.workDurationSeconds
+            breakDurationMinutes = settings.breakDurationMinutes
+            breakDurationSeconds = settings.breakDurationSeconds
+            earlyNotifyMinutes = settings.earlyNotifyMinutes
+            earlyNotifySeconds = settings.earlyNotifySeconds
+        } else {
+            // 如果没有保存的设置，使用默认值
+            let defaultSettings = TimerSettings.default
+            showSkipButton = defaultSettings.showSkipButton
+            workDurationMinutes = defaultSettings.workDurationMinutes
+            workDurationSeconds = defaultSettings.workDurationSeconds
+            breakDurationMinutes = defaultSettings.breakDurationMinutes
+            breakDurationSeconds = defaultSettings.breakDurationSeconds
+            earlyNotifyMinutes = defaultSettings.earlyNotifyMinutes
+            earlyNotifySeconds = defaultSettings.earlyNotifySeconds
+            
+            // 保存默认设置
+            saveSettings()
+        }
+    }
+}
+
+private struct TimerSettings: Codable {
+    var showSkipButton: Bool
+    var workDurationMinutes: Int
+    var workDurationSeconds: Int 
+    var breakDurationMinutes: Int
+    var breakDurationSeconds: Int
+    var earlyNotifyMinutes: Int
+    var earlyNotifySeconds: Int
+    
+    static let `default` = TimerSettings(
+        showSkipButton: false,
+        workDurationMinutes: 25,
+        workDurationSeconds: 0,
+        breakDurationMinutes: 5,
+        breakDurationSeconds: 0,
+        earlyNotifyMinutes: 2,
+        earlyNotifySeconds: 0
+    )
 }
 
