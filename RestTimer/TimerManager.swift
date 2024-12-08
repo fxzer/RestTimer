@@ -18,14 +18,15 @@ internal class TimerManager: ObservableObject {
     @Published var workDurationMinutes: Int = 25 {
         didSet {
             if oldValue != workDurationMinutes {
-                if !isValidWorkDuration() {
+                // 只在非初始化时进行校验
+                if !isInitializing && !isValidWorkDuration() {
                     let alert = NSAlert()
                     alert.messageText = "专注时长必须大于提前提醒时长"
                     alert.alertStyle = .warning
                     alert.addButton(withTitle: "确认")
                     alert.runModal()
                 } else {
-                    resetWorkTimer() // 只有在条件满足时才重置计时器
+                    resetWorkTimer()
                 }
                 saveSettings()
             }
@@ -34,7 +35,7 @@ internal class TimerManager: ObservableObject {
     @Published var workDurationSeconds: Int = 0 {
         didSet {
             if oldValue != workDurationSeconds {
-                if !isValidWorkDuration() {
+                if !isInitializing && !isValidWorkDuration() {
                     let alert = NSAlert()
                     alert.messageText = "专注时长必须大于提前提醒时长"
                     alert.alertStyle = .warning
@@ -94,8 +95,23 @@ internal class TimerManager: ObservableObject {
     
     private let defaults = UserDefaults.standard
     
+    // 添加一个标志来标识是否在初始化过程中
+    private var isInitializing = true
+    
     private init() {
+        isInitializing = true
         loadSettings()
+        
+        // 在设置 isInitializing = false 之前先验证和调整设置
+        if !isValidWorkDuration() {
+            workDurationMinutes = TimerSettings.default.workDurationMinutes
+            workDurationSeconds = TimerSettings.default.workDurationSeconds
+            earlyNotifyMinutes = TimerSettings.default.earlyNotifyMinutes
+            earlyNotifySeconds = TimerSettings.default.earlyNotifySeconds
+            saveSettings() // 保存默认设置
+        }
+        
+        isInitializing = false
         
         // 延迟初始化定时器，确保 AppKit 已完全初始化
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -139,6 +155,11 @@ internal class TimerManager: ObservableObject {
     }
     
     private func startBreak() {
+        // 如果当前是暂停状态，不要启动休息
+        if isPaused {
+            return
+        }
+        
         // 确保在主线程执行
         if !Thread.isMainThread {
             DispatchQueue.main.async { [weak self] in
@@ -178,6 +199,11 @@ internal class TimerManager: ObservableObject {
     }
     
     private func startWorkTimer() {
+        // 如果当前是暂停状态，不要启动计时器
+        if isPaused {
+            return
+        }
+        
         // 确保在主线程执行
         if !Thread.isMainThread {
             DispatchQueue.main.async { [weak self] in
@@ -195,7 +221,7 @@ internal class TimerManager: ObservableObject {
         showStartWorkNotification()
         
         // 设置提前提醒的定时器
-        if earlyNotifyDuration > 0 {
+        if earlyNotifyDuration > 0 && !isInitializing {
             let earlyNotifyDelay = workDuration - earlyNotifyDuration
             Timer.scheduledTimer(withTimeInterval: earlyNotifyDelay, repeats: false) { [weak self] _ in
                 self?.showEarlyNotification()
@@ -375,7 +401,7 @@ internal class TimerManager: ObservableObject {
             return
         }
         
-        // 清理现有定��器
+        // 清理现有定时器
         workTimer?.invalidate()
         workTimer = nil
         
@@ -391,7 +417,12 @@ internal class TimerManager: ObservableObject {
     }
     
     private func showEarlyNotification() {
-        // 确保在线程执行
+        // 如果当前是暂停状态，不显示提醒
+        if isPaused {
+            return
+        }
+        
+        // 确保在主线程执行
         guard Thread.isMainThread else {
             DispatchQueue.main.async { [weak self] in
                 self?.showEarlyNotification()
@@ -425,7 +456,7 @@ internal class TimerManager: ObservableObject {
         .background(Color.black.opacity(0.4))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         
-        // 使用 NSHostingController 管理 SwiftUI 视图
+        // 使用 NSHostingController 理 SwiftUI 视图
         let hostingController = NSHostingController(rootView: notificationContent)
         hostingController.view.wantsLayer = true
         
@@ -447,7 +478,7 @@ internal class TimerManager: ObservableObject {
         window.ignoresMouseEvents = true
         window.contentView?.appearance = NSAppearance(named: .vibrantDark)
         
-        // ���置窗口圆角
+        // 设置窗口圆角
         window.contentView?.wantsLayer = true
         window.contentView?.layer?.cornerRadius = 12
         window.contentView?.layer?.masksToBounds = true
@@ -488,12 +519,34 @@ internal class TimerManager: ObservableObject {
     func togglePause() {
         isPaused.toggle()
         if isPaused {
+            // 暂停时，停止所有计时器和提醒
+            workTimer?.invalidate()
+            workTimer = nil
+            breakTimer?.invalidate()
+            breakTimer = nil
+            // 关闭当前显示的通知窗口
+            if let window = notificationWindow {
+                window.close()
+                notificationWindow = nil
+            }
             // 保存暂停时的剩余时间
             pausedTimeRemaining = workDuration - (Date().timeIntervalSince1970 - lastWorkStartTime)
         } else {
-            // 恢复计时，更新开始时间
+            // 恢复时，更新开始时间并重新启动计时器
             if let remaining = pausedTimeRemaining {
                 lastWorkStartTime = Date().timeIntervalSince1970 - (workDuration - remaining)
+                // 创建新的工作计时器
+                workTimer = Timer.scheduledTimer(withTimeInterval: remaining, repeats: false) { [weak self] _ in
+                    self?.startBreak()
+                }
+                
+                // 如果还需要提前提醒，也要重新设置
+                if remaining > earlyNotifyDuration {
+                    let earlyNotifyDelay = remaining - earlyNotifyDuration
+                    Timer.scheduledTimer(withTimeInterval: earlyNotifyDelay, repeats: false) { [weak self] _ in
+                        self?.showEarlyNotification()
+                    }
+                }
             }
         }
     }
@@ -604,7 +657,7 @@ private struct TimerSettings: Codable {
         earlyNotifySeconds: 0
     )
     
-    // 添加一个计算总秒数的扩展方法
+    // 添加一个计算总数的扩展方法
     func totalSeconds(minutes: Int, seconds: Int) -> Int {
         return minutes * 60 + seconds
     }
