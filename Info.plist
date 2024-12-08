@@ -38,5 +38,9 @@
     <!-- 添加开机自启动权限 -->
     <key>NSAppleEventsUsageDescription</key>
     <string>需要此权限来管理开机自启动功能</string>
+    
+    <!-- 添加应用图标 -->
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
 </dict>
 </plist>

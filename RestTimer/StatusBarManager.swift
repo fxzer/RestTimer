@@ -33,8 +33,10 @@ class StatusBarManager: NSObject, ObservableObject {
             self?.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
             
             if let button = self?.statusItem?.button {
-                if let image = NSImage(systemSymbolName: "timer.circle", accessibilityDescription: "Rest Timer")?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 16, weight: .regular)) {
-                    button.image = image
+                if let customImage = NSImage(named: "YourIconName") {
+                    customImage.size = NSSize(width: 16, height: 16)
+                    customImage.isTemplate = true
+                    button.image = customImage
                 }
                 self?.updateButtonDisplay()
                 self?.setupMenu()
@@ -103,7 +105,9 @@ class StatusBarManager: NSObject, ObservableObject {
     private func updateButtonDisplay() {
         if let button = statusItem?.button {
             if timerManager.isPaused {
-                if let pauseImage = NSImage(systemSymbolName: "pause.circle", accessibilityDescription: "Paused")?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 16, weight: .regular)) {
+                if let pauseImage = NSImage(named: "YourPauseIconName") {
+                    pauseImage.size = NSSize(width: 16, height: 16)
+                    pauseImage.isTemplate = true
                     button.image = pauseImage
                 }
                 if let pausedTime = timerManager.getRemainingPausedTime(),
@@ -116,7 +120,9 @@ class StatusBarManager: NSObject, ObservableObject {
                     button.title = "--:--"
                 }
             } else {
-                if let timerImage = NSImage(systemSymbolName: "timer.circle", accessibilityDescription: "Rest Timer")?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 16, weight: .regular)) {
+                if let timerImage = NSImage(named: "YourIconName") {
+                    timerImage.size = NSSize(width: 16, height: 16)
+                    timerImage.isTemplate = true
                     button.image = timerImage
                 }
                 let remainingTime = Int(timerManager.workDuration - (Date().timeIntervalSince1970 - timerManager.lastWorkStartTime))
@@ -170,7 +176,7 @@ class StatusBarManager: NSObject, ObservableObject {
             版本: 1.0.0
             开发者: fxzer
             
-            一个简单的工休息提醒���具
+            一个简单的工休息提醒工具
             帮助你保持健康的工作节奏
             """
         alert.alertStyle = .informational
