@@ -71,6 +71,10 @@ struct SettingsView: View {
                     .toggleStyle(SwitchToggleStyle(tint: .blue))
                     .padding(.vertical, 5)
                 
+                Toggle("显示程序坞图标", isOn: $timerManager.showDockIcon)
+                    .toggleStyle(SwitchToggleStyle(tint: .blue))
+                    .padding(.vertical, 5)
+                
                 HStack {
                     Text("专注时长")
                         .frame(width: 80, alignment: .leading)
@@ -170,7 +174,7 @@ struct SettingsView: View {
                 .padding()
        
         }
-        .frame(width: 400, height: 340)
+        .frame(width: 400, height: 380)
     }
     
     private func toggleLaunchAtLogin(enabled: Bool) {

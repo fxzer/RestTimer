@@ -42,14 +42,18 @@ class StatusBarManager: NSObject, ObservableObject {
      
     private func setupStatusBar() {
         DispatchQueue.main.async { [weak self] in
-            self?.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+            self?.statusItem = NSStatusBar.system.statusItem(withLength: 45)
             
             if let button = self?.statusItem?.button {
                 if let customImage = NSImage(named: "YourIconName") {
-                    customImage.size = NSSize(width: 16, height: 16)
+                    customImage.size = NSSize(width: 14, height: 14)
                     customImage.isTemplate = true
                     button.image = customImage
                 }
+                
+                button.imagePosition = .imageLeft
+                button.imageHugsTitle = true
+                
                 self?.updateButtonDisplay()
                 self?.setupMenu()
                 self?.startButtonUpdateTimer()
@@ -116,6 +120,11 @@ class StatusBarManager: NSObject, ObservableObject {
     
     private func updateButtonDisplay() {
         if let button = statusItem?.button {
+            let timeFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: timeFont
+            ]
+            
             if timerManager.isPaused {
                 if let pauseImage = NSImage(named: "YourPauseIconName") {
                     pauseImage.size = NSSize(width: 16, height: 16)
@@ -127,9 +136,10 @@ class StatusBarManager: NSObject, ObservableObject {
                     let remainingTime = Int(pausedTime)
                     let minutes = remainingTime / 60
                     let seconds = remainingTime % 60
-                    button.title = String(format: "%02d:%02d", minutes, seconds)
+                    let timeString = String(format: "%02d:%02d", minutes, seconds)
+                    button.attributedTitle = NSAttributedString(string: timeString, attributes: attributes)
                 } else {
-                    button.title = "--:--"
+                    button.attributedTitle = NSAttributedString(string: "--:--", attributes: attributes)
                 }
             } else {
                 if let timerImage = NSImage(named: "YourIconName") {
@@ -141,9 +151,10 @@ class StatusBarManager: NSObject, ObservableObject {
                 if remainingTime > 0 {
                     let minutes = remainingTime / 60
                     let seconds = remainingTime % 60
-                    button.title = String(format: "%02d:%02d", minutes, seconds)
+                    let timeString = String(format: "%02d:%02d", minutes, seconds)
+                    button.attributedTitle = NSAttributedString(string: timeString, attributes: attributes)
                 } else {
-                    button.title = "--:--"
+                    button.attributedTitle = NSAttributedString(string: "--:--", attributes: attributes)
                 }
             }
             
@@ -151,7 +162,7 @@ class StatusBarManager: NSObject, ObservableObject {
             button.imageScaling = .scaleProportionallyDown
             
             if let image = button.image {
-                image.size = NSSize(width: 16, height: 16)
+                image.size = NSSize(width: 14, height: 14)
                 button.image = image
             }
         }
@@ -250,7 +261,7 @@ class WindowManager: ObservableObject {
         )
         
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 340),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false

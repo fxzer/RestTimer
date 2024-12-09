@@ -101,22 +101,39 @@ internal class TimerManager: ObservableObject {
     // 添加 statusBarManager 属性
     weak var statusBarManager: StatusBarManager?
     
+    @Published var showDockIcon: Bool {
+        didSet {
+            if oldValue != showDockIcon {
+                saveSettings()
+                // 确保在主线程执行，并立即更新 Dock 图标状态
+                DispatchQueue.main.async { [weak self] in
+                    self?.updateDockIconVisibility()
+                }
+            }
+        }
+    }
+    
     private init() {
+        // 从 UserDefaults 读取设置
+        if let data = UserDefaults.standard.data(forKey: "TimerSettings"),
+           let settings = try? JSONDecoder().decode(TimerSettings.self, from: data) {
+            self.showDockIcon = settings.showDockIcon
+        } else {
+            self.showDockIcon = true
+        }
+        
         isInitializing = true
         loadSettings()
         
-        // 在设置 isInitializing = false 之前先验证和调整设置
-        if !isValidWorkDuration() {
-            workDurationMinutes = TimerSettings.default.workDurationMinutes
-            workDurationSeconds = TimerSettings.default.workDurationSeconds
-            earlyNotifyMinutes = TimerSettings.default.earlyNotifyMinutes
-            earlyNotifySeconds = TimerSettings.default.earlyNotifySeconds
-            saveSettings() // 保存默认设置
+        // 初始化完成后立即应用 Dock 图标状态
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.updateDockIconVisibility()
         }
         
         isInitializing = false
         
-        // 延迟初始化定时器，确保 AppKit 已完全初始化
+        // 延迟初始化定时器...
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.startWorkTimer()
         }
@@ -281,7 +298,7 @@ internal class TimerManager: ObservableObject {
         window.level = .statusBar
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.backgroundColor = .clear
-               // 添加以下两行代码来启用点击穿透
+               // 添加以下两码来启用点击穿透
         window.ignoresMouseEvents = true
         window.contentView?.appearance = NSAppearance(named: .vibrantDark)
         // 设置窗口圆角
@@ -392,7 +409,7 @@ internal class TimerManager: ObservableObject {
     
     // 添加获取当前活动屏幕的方法
     private func getCurrentScreen() -> NSScreen? {
-        // 1. 首先尝试获取鼠标所在屏幕
+        // 1. 首先尝试获取鼠标���在屏幕
         let mouseLocation = NSEvent.mouseLocation
         let mouseScreen = NSScreen.screens.first { screen in
             screen.frame.contains(mouseLocation)
@@ -402,7 +419,7 @@ internal class TimerManager: ObservableObject {
             return screen
         }
         
-        // 2. 如果没有找到鼠标所在屏幕，尝试获取当前激活窗口所在屏幕
+        // 2. 果没有找到鼠标所在屏幕，尝试获取当前激活窗口所在屏幕
         if let keyWindow = NSApp.keyWindow,
            let windowScreen = keyWindow.screen {
             return windowScreen
@@ -544,7 +561,7 @@ internal class TimerManager: ObservableObject {
             workTimer = nil
             breakTimer?.invalidate()
             breakTimer = nil
-            // 关闭当前显示的通知窗口
+            // 关闭��前显示的通知窗口
             if let window = notificationWindow {
                 window.close()
                 notificationWindow = nil
@@ -578,6 +595,7 @@ internal class TimerManager: ObservableObject {
     private func saveSettings() {
         let settings = TimerSettings(
             showSkipButton: showSkipButton,
+            showDockIcon: showDockIcon,
             workDurationMinutes: workDurationMinutes,
             workDurationSeconds: workDurationSeconds,
             breakDurationMinutes: breakDurationMinutes,
@@ -588,15 +606,14 @@ internal class TimerManager: ObservableObject {
         
         if let encoded = try? JSONEncoder().encode(settings) {
             UserDefaults.standard.set(encoded, forKey: "TimerSettings")
-            UserDefaults.standard.synchronize()
+            UserDefaults.standard.synchronize() // 强制同步保存
         }
     }
     
     private func loadSettings() {
-        // 尝试读取持久化的设置
         if let data = UserDefaults.standard.data(forKey: "TimerSettings"),
            let settings = try? JSONDecoder().decode(TimerSettings.self, from: data) {
-            // 如果有保存的设置，使用保存的值
+            // 不要在这里设置 showDockIcon，因为它已经在 init 中设置过了
             showSkipButton = settings.showSkipButton
             workDurationMinutes = settings.workDurationMinutes
             workDurationSeconds = settings.workDurationSeconds
@@ -605,9 +622,9 @@ internal class TimerManager: ObservableObject {
             earlyNotifyMinutes = settings.earlyNotifyMinutes
             earlyNotifySeconds = settings.earlyNotifySeconds
         } else {
-            // 如果没有保存的设置，使用默认值
             let defaultSettings = TimerSettings.default
             showSkipButton = defaultSettings.showSkipButton
+            // showDockIcon 已经在 init 中设置过了
             workDurationMinutes = defaultSettings.workDurationMinutes
             workDurationSeconds = defaultSettings.workDurationSeconds
             breakDurationMinutes = defaultSettings.breakDurationMinutes
@@ -615,7 +632,6 @@ internal class TimerManager: ObservableObject {
             earlyNotifyMinutes = defaultSettings.earlyNotifyMinutes
             earlyNotifySeconds = defaultSettings.earlyNotifySeconds
             
-            // 保存默认设置
             saveSettings()
         }
     }
@@ -623,6 +639,7 @@ internal class TimerManager: ObservableObject {
     private func validateAndAdjustEarlyNotify() {
         let settings = TimerSettings(
             showSkipButton: showSkipButton,
+            showDockIcon: showDockIcon,
             workDurationMinutes: workDurationMinutes,
             workDurationSeconds: workDurationSeconds,
             breakDurationMinutes: breakDurationMinutes,
@@ -656,10 +673,40 @@ internal class TimerManager: ObservableObject {
         let earlyNotifyTotalSeconds = earlyNotifyMinutes * 60 + earlyNotifySeconds
         return workTotalSeconds > earlyNotifyTotalSeconds
     }
+    
+    private func updateDockIconVisibility() {
+        // 确保在主线程执行
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.updateDockIconVisibility()
+            }
+            return
+        }
+        
+        // 根据设置更新 Dock 图标状态
+        if showDockIcon {
+            if NSApp.activationPolicy() != .regular {
+                NSApp.setActivationPolicy(.regular)
+            }
+        } else {
+            if NSApp.activationPolicy() != .accessory {
+                NSApp.setActivationPolicy(.accessory)
+            }
+        }
+        
+        // 强制更新 UI
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.windows.forEach { window in
+                window.orderFront(nil)
+            }
+        }
+    }
 }
 
 private struct TimerSettings: Codable {
     var showSkipButton: Bool
+    var showDockIcon: Bool
     var workDurationMinutes: Int
     var workDurationSeconds: Int 
     var breakDurationMinutes: Int
@@ -669,6 +716,7 @@ private struct TimerSettings: Codable {
     
     static let `default` = TimerSettings(
         showSkipButton: false,
+        showDockIcon: true,
         workDurationMinutes: 25,
         workDurationSeconds: 0,
         breakDurationMinutes: 5,
@@ -677,7 +725,7 @@ private struct TimerSettings: Codable {
         earlyNotifySeconds: 0
     )
     
-    // 添加一个计算总数的扩展方法
+    // 添加一个计算总数扩展方法
     func totalSeconds(minutes: Int, seconds: Int) -> Int {
         return minutes * 60 + seconds
     }
