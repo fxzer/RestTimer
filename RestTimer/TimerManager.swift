@@ -409,7 +409,7 @@ internal class TimerManager: ObservableObject {
     
     // 添加获取当前活动屏幕的方法
     private func getCurrentScreen() -> NSScreen? {
-        // 1. 首先尝试获取鼠标���在屏幕
+        // 1. 首先尝试获取鼠标所在屏幕
         let mouseLocation = NSEvent.mouseLocation
         let mouseScreen = NSScreen.screens.first { screen in
             screen.frame.contains(mouseLocation)
@@ -561,7 +561,7 @@ internal class TimerManager: ObservableObject {
             workTimer = nil
             breakTimer?.invalidate()
             breakTimer = nil
-            // 关闭��前显示的通知窗口
+            // 关闭前显示的通知窗口
             if let window = notificationWindow {
                 window.close()
                 notificationWindow = nil
@@ -652,7 +652,7 @@ internal class TimerManager: ObservableObject {
         if settings.earlyNotifyTotalSeconds >= settings.workTotalSeconds {
             // 将提前提醒时间设置为专注时间的一半或默认值(2分钟)取较小值
             let halfWorkSeconds = settings.workTotalSeconds / 2
-            let defaultEarlyNotifySeconds = 2 * 60 // 2分钟
+            let defaultEarlyNotifySeconds = 2 * 60 // 2分��
             let newEarlyNotifySeconds = min(halfWorkSeconds, defaultEarlyNotifySeconds)
             
             earlyNotifyMinutes = newEarlyNotifySeconds / 60
@@ -683,7 +683,7 @@ internal class TimerManager: ObservableObject {
             return
         }
         
-        // 根据设置更新 Dock 图标状态
+        // 先更新激活策略
         if showDockIcon {
             if NSApp.activationPolicy() != .regular {
                 NSApp.setActivationPolicy(.regular)
@@ -694,11 +694,19 @@ internal class TimerManager: ObservableObject {
             }
         }
         
-        // 强制更新 UI
-        DispatchQueue.main.async {
+        // 使用 async 延迟执行窗口更新，确保激活策略已经生效
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            // 先激活应用
             NSApp.activate(ignoringOtherApps: true)
-            NSApp.windows.forEach { window in
-                window.orderFront(nil)
+            
+            // 等待短暂延迟后再更新窗口
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                // 更新所有窗口
+                NSApp.windows.forEach { window in
+                    if window.isVisible {
+                        window.orderFront(nil)
+                    }
+                }
             }
         }
     }
