@@ -15,18 +15,18 @@ class StatusBarManager: NSObject, ObservableObject {
         timerManager.statusBarManager = self
         setupStatusBar()
         
-        // 默认启用开机自启动
+        // 默认不启用开机自启动
         if #available(macOS 13.0, *) {
-            if SMAppService.mainApp.status != .enabled {
+            if SMAppService.mainApp.status == .enabled {
                 do {
-                    try SMAppService.mainApp.register()
+                    try SMAppService.mainApp.unregister()
                 } catch {
-                    print("启用开机自启动失败: \(error)")
+                    print("禁用开机自启动失败: \(error)")
                 }
             }
         } else {
             // 旧版本 API
-            _ = SMLoginItemSetEnabled("fxzer.top.RestTimer" as CFString, true)
+            _ = SMLoginItemSetEnabled("fxzer.top.RestTimer" as CFString, false)
         }
     }
    // 添加一个公共方法来更新暂停/继续菜单项
@@ -82,6 +82,16 @@ class StatusBarManager: NSObject, ObservableObject {
         )
         pauseItem.target = self
         menu.addItem(pauseItem)
+        
+        // 添加重置选项
+        menu.addItem(NSMenuItem.separator())
+        let resetItem = NSMenuItem(
+            title: "重置",
+            action: #selector(resetTimer),
+            keyEquivalent: "r"
+        )
+        resetItem.target = self
+        menu.addItem(resetItem)
         
         // 关于选项
         menu.addItem(NSMenuItem.separator())
@@ -232,6 +242,11 @@ class StatusBarManager: NSObject, ObservableObject {
     @objc private func togglePause(_ sender: NSMenuItem) {
         timerManager.togglePause()
         sender.title = timerManager.isPaused ? "继续" : "暂停"
+        updateButtonDisplay()
+    }
+    
+    @objc private func resetTimer(_ sender: NSMenuItem) {
+        timerManager.resetTimer()
         updateButtonDisplay()
     }
     

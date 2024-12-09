@@ -113,6 +113,9 @@ internal class TimerManager: ObservableObject {
         }
     }
     
+    // 添加一个属性来跟踪提前提醒的定时器
+    private var earlyNotifyTimer: Timer?
+    
     private init() {
         // 从 UserDefaults 读取设置
         if let data = UserDefaults.standard.data(forKey: "TimerSettings"),
@@ -232,8 +235,11 @@ internal class TimerManager: ObservableObject {
             return
         }
         
+        // 清理所有定时器
         workTimer?.invalidate()
         workTimer = nil
+        earlyNotifyTimer?.invalidate()
+        earlyNotifyTimer = nil
         
         lastWorkStartTime = Date().timeIntervalSince1970
         
@@ -243,7 +249,7 @@ internal class TimerManager: ObservableObject {
         // 设置提前提醒的定时器
         if earlyNotifyDuration > 0 && !isInitializing {
             let earlyNotifyDelay = workDuration - earlyNotifyDuration
-            Timer.scheduledTimer(withTimeInterval: earlyNotifyDelay, repeats: false) { [weak self] _ in
+            earlyNotifyTimer = Timer.scheduledTimer(withTimeInterval: earlyNotifyDelay, repeats: false) { [weak self] _ in
                 self?.showEarlyNotification()
             }
         }
@@ -279,7 +285,7 @@ internal class TimerManager: ObservableObject {
         .background(Color.black.opacity(0.4))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         
-        // 使用 NSHostingController 来管理 SwiftUI 视图
+        // 使用 NSHostingController 来管理 SwiftUI 图
         let hostingController = NSHostingController(rootView: notificationContent)
         hostingController.view.wantsLayer = true
         
@@ -379,7 +385,7 @@ internal class TimerManager: ObservableObject {
             overlayView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
             visualEffectView.addSubview(overlayView)
             
-            // 创建并配置 SwiftUI 休息视图
+            // 创并配置 SwiftUI 休息视图
             let breakView = BreakView()
                 .environmentObject(self)
             let hostingView = NSHostingView(rootView: breakView)
@@ -419,7 +425,7 @@ internal class TimerManager: ObservableObject {
             return screen
         }
         
-        // 2. 果没有找到鼠标所在屏幕，尝试获取当前激活窗口所在屏幕
+        // 2. 果没有找��鼠标所在屏幕，尝试获取当前激活窗口在屏幕
         if let keyWindow = NSApp.keyWindow,
            let windowScreen = keyWindow.screen {
             return windowScreen
@@ -555,37 +561,72 @@ internal class TimerManager: ObservableObject {
     
     func togglePause() {
         isPaused.toggle()
+        
         if isPaused {
             // 暂停时，停止所有计时器和提醒
             workTimer?.invalidate()
             workTimer = nil
             breakTimer?.invalidate()
             breakTimer = nil
+            earlyNotifyTimer?.invalidate()
+            earlyNotifyTimer = nil
+            
             // 关闭前显示的通知窗口
             if let window = notificationWindow {
                 window.close()
                 notificationWindow = nil
             }
-            // 保存暂停时的剩余时间
-            pausedTimeRemaining = workDuration - (Date().timeIntervalSince1970 - lastWorkStartTime)
+            
+            // 保存��停时的剩余时间
+            if isBreakTime {
+                pausedTimeRemaining = remainingBreakTime
+            } else {
+                pausedTimeRemaining = workDuration - (Date().timeIntervalSince1970 - lastWorkStartTime)
+            }
         } else {
             // 恢复时，更新开始时间并重新启动计时器
             if let remaining = pausedTimeRemaining {
-                lastWorkStartTime = Date().timeIntervalSince1970 - (workDuration - remaining)
-                // 创建新的工作计时器
-                workTimer = Timer.scheduledTimer(withTimeInterval: remaining, repeats: false) { [weak self] _ in
-                    self?.startBreak()
-                }
-                
-                // 如果还需要提前提醒，也要重新设置
-                if remaining > earlyNotifyDuration {
-                    let earlyNotifyDelay = remaining - earlyNotifyDuration
-                    Timer.scheduledTimer(withTimeInterval: earlyNotifyDelay, repeats: false) { [weak self] _ in
-                        self?.showEarlyNotification()
+                if isBreakTime {
+                    // 如果是休息时间
+                    remainingBreakTime = remaining
+                    breakTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+                        guard let self = self else {
+                            timer.invalidate()
+                            return
+                        }
+                        
+                        DispatchQueue.main.async {
+                            if self.remainingBreakTime > 0 {
+                                self.remainingBreakTime -= 1
+                            } else {
+                                self.cleanupAndEndBreak()
+                                timer.invalidate()
+                            }
+                        }
+                    }
+                } else {
+                    // 如果是工作时间
+                    lastWorkStartTime = Date().timeIntervalSince1970 - (workDuration - remaining)
+                    
+                    // 创建新的工作计时器
+                    workTimer = Timer.scheduledTimer(withTimeInterval: remaining, repeats: false) { [weak self] _ in
+                        self?.startBreak()
+                    }
+                    
+                    // 如果还需要提前提醒，也要重新设置
+                    if remaining > earlyNotifyDuration {
+                        let earlyNotifyDelay = remaining - earlyNotifyDuration
+                        earlyNotifyTimer = Timer.scheduledTimer(withTimeInterval: earlyNotifyDelay, repeats: false) { [weak self] _ in
+                            self?.showEarlyNotification()
+                        }
                     }
                 }
             }
+            pausedTimeRemaining = nil
         }
+        
+        // 更新状态栏菜单
+        statusBarManager?.updatePauseMenuItem()
     }
     
     func getRemainingPausedTime() -> TimeInterval? {
@@ -652,7 +693,7 @@ internal class TimerManager: ObservableObject {
         if settings.earlyNotifyTotalSeconds >= settings.workTotalSeconds {
             // 将提前提醒时间设置为专注时间的一半或默认值(2分钟)取较小值
             let halfWorkSeconds = settings.workTotalSeconds / 2
-            let defaultEarlyNotifySeconds = 2 * 60 // 2分��
+            let defaultEarlyNotifySeconds = 2 * 60 // 2分钟
             let newEarlyNotifySeconds = min(halfWorkSeconds, defaultEarlyNotifySeconds)
             
             earlyNotifyMinutes = newEarlyNotifySeconds / 60
@@ -709,6 +750,48 @@ internal class TimerManager: ObservableObject {
                 }
             }
         }
+    }
+    
+    func resetTimer() {
+        // 确保在主线程执行
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.resetTimer()
+            }
+            return
+        }
+        
+        // 清理所有现有定时器
+        workTimer?.invalidate()
+        workTimer = nil
+        breakTimer?.invalidate()
+        breakTimer = nil
+        earlyNotifyTimer?.invalidate()
+        earlyNotifyTimer = nil
+        
+        // 清理所有窗口
+        if let window = notificationWindow {
+            window.close()
+            notificationWindow = nil
+        }
+        
+        breakWindows.forEach { window in
+            window.orderOut(nil)
+        }
+        breakWindows.removeAll()
+        
+        // 重置状态
+        lastWorkStartTime = Date().timeIntervalSince1970
+        isPaused = false
+        isBreakTime = false
+        remainingBreakTime = 0
+        pausedTimeRemaining = nil
+        
+        // 更新状态栏菜单项
+        statusBarManager?.updatePauseMenuItem()
+        
+        // 重新开始工作定时器
+        startWorkTimer()
     }
 }
 
