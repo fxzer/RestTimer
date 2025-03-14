@@ -4,10 +4,53 @@
 <dict>
 	<key>SchemeUserState</key>
 	<dict>
-		<key>RestTimer.xcscheme_^#shared#^_</key>
+		<key>Copy of Copy of Copy of Copy of Copy of RestTimer.xcscheme</key>
+		<dict>
+			<key>orderHint</key>
+			<integer>4</integer>
+		</dict>
+		<key>Copy of Copy of Copy of Copy of RestTimer.xcscheme</key>
+		<dict>
+			<key>orderHint</key>
+			<integer>3</integer>
+		</dict>
+		<key>Copy of Copy of Copy of RestTimer.xcscheme</key>
+		<dict>
+			<key>orderHint</key>
+			<integer>2</integer>
+		</dict>
+		<key>Copy of Copy of RestTimer.xcscheme</key>
+		<dict>
+			<key>orderHint</key>
+			<integer>1</integer>
+		</dict>
+		<key>Copy of RestTimer.xcscheme</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>0</integer>
+		</dict>
+		<key>RestTimer.xcscheme_^#shared#^_</key>
+		<dict>
+			<key>orderHint</key>
+			<integer>5</integer>
+		</dict>
+	</dict>
+	<key>SuppressBuildableAutocreation</key>
+	<dict>
+		<key>C3E3E3082D03F1F200A0A60D</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>C3E3E3192D03F1F300A0A60D</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>C3E3E3232D03F1F300A0A60D</key>
+		<dict>
+			<key>primary</key>
+			<true/>
 		</dict>
 	</dict>
 </dict>
