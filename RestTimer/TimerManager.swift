@@ -359,8 +359,17 @@ internal class TimerManager: ObservableObject {
         
         // 为每个屏幕创建休息窗口
         for screen in NSScreen.screens {
+            // 创建一个居中的窗口，而不是全屏窗口
+            let windowSize = NSSize(width: 400, height: 400) // 设置适当的窗口大小
+            let screenFrame = screen.frame
+            let windowOrigin = NSPoint(
+                x: screenFrame.midX - windowSize.width / 2,
+                y: screenFrame.midY - windowSize.height / 2
+            )
+            let windowFrame = NSRect(origin: windowOrigin, size: windowSize)
+            
             let window = NSWindow(
-                contentRect: screen.frame,
+                contentRect: windowFrame,
                 styleMask: [.borderless],
                 backing: .buffered,
                 defer: false
@@ -368,7 +377,7 @@ internal class TimerManager: ObservableObject {
             
             window.level = .screenSaver
             window.isOpaque = false
-            window.hasShadow = false
+            window.hasShadow = true
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             window.acceptsMouseMovedEvents = true
             
@@ -379,13 +388,14 @@ internal class TimerManager: ObservableObject {
             visualEffectView.state = .active
             visualEffectView.wantsLayer = true
             
-            // 添加半透明黑色背景层
+            // 添加灰色背景层
             let overlayView = NSView(frame: visualEffectView.bounds)
             overlayView.wantsLayer = true
-            overlayView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
+            overlayView.layer?.backgroundColor = NSColor.darkGray.withAlphaComponent(0.8).cgColor
+            overlayView.layer?.cornerRadius = 12 // 添加圆角
             visualEffectView.addSubview(overlayView)
             
-            // 创并配置 SwiftUI 休息视图
+            // 创建并配置 SwiftUI 休息视图
             let breakView = BreakView()
                 .environmentObject(self)
             let hostingView = NSHostingView(rootView: breakView)
@@ -394,9 +404,6 @@ internal class TimerManager: ObservableObject {
             // 组合视图层次
             visualEffectView.addSubview(hostingView)
             window.contentView = visualEffectView
-            
-            // 设置窗口位置到对应屏幕
-            window.setFrame(screen.frame, display: true)
             
             // 保存窗口引用
             breakWindows.append(window)
@@ -425,7 +432,7 @@ internal class TimerManager: ObservableObject {
             return screen
         }
         
-        // 2. 果没有找��鼠标所在屏幕，尝试获取当前激活窗口在屏幕
+        // 2. 果没有找到鼠标所在屏幕，尝试获取当前激活窗口在屏幕
         if let keyWindow = NSApp.keyWindow,
            let windowScreen = keyWindow.screen {
             return windowScreen
@@ -577,7 +584,7 @@ internal class TimerManager: ObservableObject {
                 notificationWindow = nil
             }
             
-            // 保存��停时的剩余时间
+            // 保存暂停时的剩余时间
             if isBreakTime {
                 pausedTimeRemaining = remainingBreakTime
             } else {

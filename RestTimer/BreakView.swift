@@ -36,68 +36,67 @@ struct BreakView: View {
         "休息不仅是为了恢复能量，也是为了保护生命的热情。 ——苏格拉底",
         // 新增谚语
         "猫捉老鼠中场休息——放松一会儿再较量",
-        "打工人也要打‘暂停键’",
+        "打工人也要打'暂停键'",
         "小憩一会，地球照样转",
         // 英文
         "Rest now, hustle later.",
         "You can't pour from an empty cup — take a break!",
-        "Take a nap. It’s not being lazy, it’s being productive in the long run.",
+        "Take a nap. It's not being lazy, it's being productive in the long run.",
         "Good things come to those who rest.",
         "Coffee first, then rest.",
-        "I’m not lazy, I’m in energy-saving mode.",
-        "Life’s too short to not take naps.",
+        "I'm not lazy, I'm in energy-saving mode.",
+        "Life's too short to not take naps.",
         "Resting is an art; I am a master.",
-        "Don’t forget to recharge your batteries... literally and figuratively!",
+        "Don't forget to recharge your batteries... literally and figuratively!",
         "A day without rest is like a computer without a reboot — it crashes eventually.",
-        "Rest: because you can’t do your best if you’re exhausted!",
+        "Rest: because you can't do your best if you're exhausted!",
         "Take a break, or your brain will break!",
         "Do your mind a favor: take five!",
         "Rest is the secret ingredient to success.",
         "Pause to recharge, not to procrastinate!",
         "Even superheroes need a nap!",
         "Rest today, conquer tomorrow!",
-        "Don’t burn out, take the timeout.",
+        "Don't burn out, take the timeout.",
         "Short break = long-lasting productivity.",
         "Work hard, rest harder!"
     ]
     
     var body: some View {
-        VStack(spacing: 40) {
+        VStack(spacing: 20) {
             // 显示当前时间
             Text(currentTime.formatted(date: .omitted, time: .standard))
-                .font(.system(size: 40))
+                .font(.system(size: 24))
                 .fontWeight(.bold)
                 .foregroundColor(.white)
-                .frame(width: 200)
                 .monospacedDigit()
                 .lineLimit(1)
             
             // 仅显示倒计时
             Text(remainingTimeText())
-                .font(.system(size: 150))
+                .font(.system(size: 60))
                 .fontWeight(.bold)
                 .foregroundColor(.white)
-                .frame(width: 500)
                 .monospacedDigit()
                 .lineLimit(1)
             
             // 显示随机名言
             Text(randomQuote)
-                .font(.system(size: 40))
+                .font(.system(size: 18))
                 .foregroundColor(.white)
-                .fontWeight(.bold) // 字体加粗
+                .fontWeight(.bold)
                 .multilineTextAlignment(.center)
-                .padding()
+                .padding(.horizontal)
+                .lineLimit(4)
             
             if timerManager.showSkipButton {
                 Button(action: {
                     timerManager.skipBreak()
                 }) {
                     Text("跳过休息")
-                        .font(.system(size: 18, weight: .medium))
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundColor(Color.black)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
                         .background(Capsule().fill(Color.white))
                         .overlay(Capsule().stroke(Color.white, lineWidth: 1))
                 }
@@ -108,7 +107,6 @@ struct BreakView: View {
                         NSCursor.pop()
                     }
                 }
-                .padding(.top, 20)
                 .buttonStyle(CustomButtonStyle())
             }
         }
