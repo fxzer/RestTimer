@@ -90,8 +90,8 @@ internal class TimerManager: ObservableObject {
         TimeInterval(earlyNotifyMinutes * 60 + earlyNotifySeconds)
     }
     
-    // 添加一个属性来保持对通知窗口的引用
-    private var notificationWindow: NSWindow?
+    // 修改为数组以存储多个通知窗口的引用
+    private var notificationWindows: [NSWindow] = []
     
     private let defaults = UserDefaults.standard
     
@@ -269,83 +269,93 @@ internal class TimerManager: ObservableObject {
             return
         }
         
-        // 果已有通知窗口，先关闭它
-        if let existingWindow = notificationWindow {
-            existingWindow.close()
-            notificationWindow = nil
+        // 关闭并清理所有已存在的通知窗口
+        notificationWindows.forEach { window in
+            window.close()
+        }
+        notificationWindows.removeAll()
+        
+        // 为每个屏幕创建通知窗口
+        for screen in NSScreen.screens {
+            // 创建并配置通知视图
+            let notificationContent = VStack {
+                Text("开始专注")
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            .frame(width: 200, height: 200)
+            .background(Color.black.opacity(0.4))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            
+            // 使用 NSHostingController 来管理 SwiftUI 视图
+            let hostingController = NSHostingController(rootView: notificationContent)
+            hostingController.view.wantsLayer = true
+            
+            // 创建并配置窗口 - 确保窗口大小与内容大小一致
+            let contentSize = CGSize(width: 200, height: 200)
+            let window = NSPanel(
+                contentRect: NSRect(x: 0, y: 0, width: contentSize.width, height: contentSize.height),
+                styleMask: [.borderless, .nonactivatingPanel],
+                backing: .buffered,
+                defer: false
+            )
+            
+            // 配置窗口属性
+            window.contentViewController = hostingController
+            window.isOpaque = false
+            window.hasShadow = true
+            window.level = .statusBar
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            window.backgroundColor = .clear
+            window.ignoresMouseEvents = true
+            window.contentView?.appearance = NSAppearance(named: .vibrantDark)
+            
+            // 设置窗口圆角
+            window.contentView?.wantsLayer = true
+            window.contentView?.layer?.cornerRadius = 12
+            window.contentView?.layer?.masksToBounds = true
+            
+            // 获取屏幕尺寸
+            let screenFrame = screen.frame
+            
+            // 先确保窗口尺寸正确
+            window.contentViewController?.view.layout()
+            window.contentViewController?.view.layoutSubtreeIfNeeded()
+            
+            // 计算居中位置
+            let windowSize = window.frame.size
+            let centerX = screenFrame.origin.x + screenFrame.width / 2
+            let centerY = screenFrame.origin.y + screenFrame.height / 2
+            
+            // 计算左下角坐标（macOS坐标系原点在左下角）
+            let originX = centerX - windowSize.width / 2 - 100
+            let originY = centerY - windowSize.height / 2
+            
+            // 先设置位置，然后再显示窗口
+            window.setFrameOrigin(NSPoint(x: originX, y: originY))
+            window.orderFront(nil)
+            
+            // 保存窗口引用
+            notificationWindows.append(window)
         }
         
-        // 创建并配置通知视图
-        let notificationContent = VStack {
-            Text("开始专注")
-                .font(.system(size: 40, weight: .bold))
-                .foregroundColor(.white)
-        }
-        .frame(width: 200, height: 200)
-        .background(Color.black.opacity(0.4))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        
-        // 使用 NSHostingController 来管理 SwiftUI 图
-        let hostingController = NSHostingController(rootView: notificationContent)
-        hostingController.view.wantsLayer = true
-        
-        // 创建并配置窗口
-        let window = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 200, height: 200),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        
-        // 配置窗口属性
-        window.contentViewController = hostingController
-        window.isOpaque = false
-        window.hasShadow = true
-        window.level = .statusBar
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window.backgroundColor = .clear
-               // 添加以下两码来启用点击穿透
-        window.ignoresMouseEvents = true
-        window.contentView?.appearance = NSAppearance(named: .vibrantDark)
-        // 设置窗口圆角
-        window.contentView?.wantsLayer = true
-        window.contentView?.layer?.cornerRadius = 12
-        window.contentView?.layer?.masksToBounds = true
-        
-        // 获取当前活动屏幕或鼠标所在屏幕
-        let activeScreen = getCurrentScreen()
-        
-        // 计算窗口位置（在当前活动屏幕居中）
-        if let screen = activeScreen {
-            let screenFrame = screen.visibleFrame
-            let x = screenFrame.minX + (screenFrame.width - window.frame.width) / 2
-            let y = screenFrame.minY + (screenFrame.height - window.frame.height) / 2
-            window.setFrameOrigin(NSPoint(x: x, y: y))
-        }
-        
-        // 保存窗口引用
-        notificationWindow = window
-        
-        // 显示窗口并设置自动关闭
-        DispatchQueue.main.async { [weak self] in
+        // 3秒后关闭所有窗口
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
             guard let self = self else { return }
             
-            // 显示窗口
-            self.notificationWindow?.orderFront(nil)
+            // 对每个窗口应用淡出动画
+            for window in self.notificationWindows {
+                NSAnimationContext.runAnimationGroup({ context in
+                    context.duration = 0.3
+                    window.animator().alphaValue = 0
+                }, completionHandler: {
+                    window.close()
+                })
+            }
             
-            // 3秒后关闭
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-                guard let self = self else { return }
-                
-                if let window = self.notificationWindow {
-                    NSAnimationContext.runAnimationGroup({ context in
-                        context.duration = 0.3
-                        window.animator().alphaValue = 0
-                    }, completionHandler: { [weak self] in
-                        window.close()
-                        self?.notificationWindow = nil
-                    })
-                }
+            // 动画完成后清空数组
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.notificationWindows.removeAll()
             }
         }
     }
@@ -382,7 +392,7 @@ internal class TimerManager: ObservableObject {
             // 添加半透明黑色背景层
             let overlayView = NSView(frame: visualEffectView.bounds)
             overlayView.wantsLayer = true
-            overlayView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.5).cgColor
+            overlayView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.4).cgColor
             visualEffectView.addSubview(overlayView)
             
             // 创并配置 SwiftUI 休息视图
@@ -425,7 +435,7 @@ internal class TimerManager: ObservableObject {
             return screen
         }
         
-        // 2. 果没有找��鼠标所在屏幕，尝试获取当前激活窗口在屏幕
+        // 2. 果没有找到鼠标所在屏幕，尝试获取当前激活窗口在屏幕
         if let keyWindow = NSApp.keyWindow,
            let windowScreen = keyWindow.screen {
             return windowScreen
@@ -473,88 +483,103 @@ internal class TimerManager: ObservableObject {
             return
         }
         
-        // 如果已有通知窗口，先关闭它
-        if let existingWindow = notificationWindow {
-            existingWindow.close()
-            notificationWindow = nil
+        // 关闭并清理所有已存在的通知窗口
+        notificationWindows.forEach { window in
+            window.close()
         }
+        notificationWindows.removeAll()
         
         // 计算剩余时间
         let remainingMinutes = Int(earlyNotifyDuration) / 60
         let remainingSeconds = Int(earlyNotifyDuration) % 60
         
-        // 创建并配置通知视图
-        let notificationContent = VStack {
-            Text("\(remainingMinutes)分\(remainingSeconds)秒后")
-                .font(.system(size: 30, weight: .bold))
-                .foregroundColor(.white)
-                .multilineTextAlignment(.center)
-                .padding(.bottom, 10)
-            Text("将进入休息")
-                .font(.system(size: 30, weight: .bold))
-                .foregroundColor(.white)
-                .multilineTextAlignment(.center)
+        // 为每个屏幕创建通知窗口
+        for screen in NSScreen.screens {
+            // 创建并配置通知视图
+            let notificationContent = VStack {
+                Text("\(remainingMinutes)分\(remainingSeconds)秒后")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.bottom, 10)
+                Text("将进入休息")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(width: 250, height: 150)
+            .background(Color.black.opacity(0.4))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            
+            // 使用 NSHostingController 管理 SwiftUI 视图
+            let hostingController = NSHostingController(rootView: notificationContent)
+            hostingController.view.wantsLayer = true
+            
+            // 创建并配置窗口 - 确保窗口大小与内容大小一致
+            let contentSize = CGSize(width: 250, height: 150)
+            let window = NSPanel(
+                contentRect: NSRect(x: 0, y: 0, width: contentSize.width, height: contentSize.height),
+                styleMask: [.borderless, .nonactivatingPanel],
+                backing: .buffered,
+                defer: false
+            )
+            
+            // 配置窗口属性
+            window.contentViewController = hostingController
+            window.isOpaque = false
+            window.hasShadow = true
+            window.level = .statusBar
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            window.backgroundColor = .clear
+            window.ignoresMouseEvents = true
+            window.contentView?.appearance = NSAppearance(named: .vibrantDark)
+            
+            // 设置窗口圆角
+            window.contentView?.wantsLayer = true
+            window.contentView?.layer?.cornerRadius = 12
+            window.contentView?.layer?.masksToBounds = true
+            
+            // 获取屏幕尺寸
+            let screenFrame = screen.frame
+            
+            // 先确保窗口尺寸正确
+            window.contentViewController?.view.layout()
+            window.contentViewController?.view.layoutSubtreeIfNeeded()
+            
+            // 计算居中位置
+            let windowSize = window.frame.size
+            let centerX = screenFrame.origin.x + screenFrame.width / 2
+            let centerY = screenFrame.origin.y + screenFrame.height / 2
+            
+            // 计算左下角坐标（macOS坐标系原点在左下角）
+            let originX = centerX - windowSize.width / 2 - 100
+            let originY = centerY - windowSize.height / 2
+            
+            // 先设置位置，然后再显示窗口
+            window.setFrameOrigin(NSPoint(x: originX, y: originY))
+            window.orderFront(nil)
+            
+            // 保存窗口引用
+            notificationWindows.append(window)
         }
-        .frame(width: 250, height: 150)
-        .background(Color.black.opacity(0.4))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
         
-        // 使用 NSHostingController 理 SwiftUI 视图
-        let hostingController = NSHostingController(rootView: notificationContent)
-        hostingController.view.wantsLayer = true
-        
-        // 创建并配置窗口
-        let window = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        
-        // 配置窗口属性
-        window.contentViewController = hostingController
-        window.isOpaque = false
-        window.hasShadow = true
-        window.level = .statusBar
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window.backgroundColor = .clear
-        window.ignoresMouseEvents = true
-        window.contentView?.appearance = NSAppearance(named: .vibrantDark)
-        
-        // 设置窗口圆角
-        window.contentView?.wantsLayer = true
-        window.contentView?.layer?.cornerRadius = 12
-        window.contentView?.layer?.masksToBounds = true
-        
-        // 获取当前活动屏幕
-        let activeScreen = getCurrentScreen()
-        
-        // 计算窗口位置（在当前活动屏幕居中）
-        if let screen = activeScreen {
-            let screenFrame = screen.visibleFrame
-            let x = screenFrame.minX + (screenFrame.width - window.frame.width) / 2
-            let y = screenFrame.minY + (screenFrame.height - window.frame.height) / 2
-            window.setFrameOrigin(NSPoint(x: x, y: y))
-        }
-        
-        // 保存窗口引用
-        notificationWindow = window
-        
-        // 显示窗口并设置自动关闭
-        window.orderFront(nil)
-        
-        // 3秒后关闭
+        // 3秒后关闭所有窗口
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
             guard let self = self else { return }
             
-            if let window = self.notificationWindow {
+            // 对每个窗口应用淡出动画
+            for window in self.notificationWindows {
                 NSAnimationContext.runAnimationGroup({ context in
                     context.duration = 0.3
                     window.animator().alphaValue = 0
-                }, completionHandler: { [weak self] in
+                }, completionHandler: {
                     window.close()
-                    self?.notificationWindow = nil
                 })
+            }
+            
+            // 动画完成后清空数组
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.notificationWindows.removeAll()
             }
         }
     }
@@ -572,12 +597,12 @@ internal class TimerManager: ObservableObject {
             earlyNotifyTimer = nil
             
             // 关闭前显示的通知窗口
-            if let window = notificationWindow {
+            if let window = notificationWindows.first {
                 window.close()
-                notificationWindow = nil
+                notificationWindows.remove(at: 0)
             }
             
-            // 保存��停时的剩余时间
+            // 保存暂停时的剩余时间
             if isBreakTime {
                 pausedTimeRemaining = remainingBreakTime
             } else {
@@ -770,9 +795,9 @@ internal class TimerManager: ObservableObject {
         earlyNotifyTimer = nil
         
         // 清理所有窗口
-        if let window = notificationWindow {
+        if let window = notificationWindows.first {
             window.close()
-            notificationWindow = nil
+            notificationWindows.remove(at: 0)
         }
         
         breakWindows.forEach { window in
