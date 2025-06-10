@@ -384,7 +384,7 @@ internal class TimerManager: ObservableObject {
             
             // 创建一个视觉效果视图作为背景
             let visualEffectView = NSVisualEffectView(frame: window.contentView?.bounds ?? .zero)
-            visualEffectView.material = .dark  // 可以尝试其他材质效果：.ultraDark, .light, .mediumLight 等
+            visualEffectView.material = .fullScreenUI  // 使用语义化材质 .hudWindow 替代废弃的 .dark
             visualEffectView.blendingMode = .behindWindow
             visualEffectView.state = .active
             visualEffectView.wantsLayer = true

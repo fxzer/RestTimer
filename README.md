@@ -79,6 +79,22 @@ open RestTimer.xcodeproj
 # 构建运行
 Command + R
 ```
+## 直接使用运行产生的App 文件
+
+```bash
+#  在 Xcode 中打开项目并运行
+# 生成的 .app 文件通常位于：
+~/Library/Developer/Xcode/DerivedData/RestTimer-[一串随机字符]/Build/Products/Debug/RestTimer.app
+```
+
+## 打包
+
+```bash
+# 在 Xcode 中选择 "Product" > "Archive"
+# 在打开的 Organizer 窗口中选择 "Distribute App"
+# 按照提示导出 .app 文件
+```
+
 
 ## 贡献指南
 
