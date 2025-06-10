@@ -266,6 +266,7 @@ class WindowManager: ObservableObject {
     func showSettings(timerManager: TimerManager) {
         if let existingWindow = settingsWindow {
             existingWindow.makeKeyAndOrderFront(nil)
+            centerWindowOnMainScreen(existingWindow)
             NSApplication.shared.activate(ignoringOtherApps: true)
             return
         }
@@ -284,14 +285,37 @@ class WindowManager: ObservableObject {
         
         window.title = "设置"
         window.contentViewController = controller
-        window.center()
         window.isReleasedWhenClosed = false
         window.delegate = WindowDelegate.shared
+        window.level = .floating
         
         settingsWindow = window
+        
+        // 先显示窗口
         window.makeKeyAndOrderFront(nil)
         NSApplication.shared.activate(ignoringOtherApps: true)
+        
+        // 延迟执行居中操作，确保窗口已经完全加载
+        DispatchQueue.main.async {
+            self.centerWindowOnMainScreen(window)
+        }
+        
         isSettingsWindowVisible = true
+    }
+    
+    // 单独的窗口居中方法
+    private func centerWindowOnMainScreen(_ window: NSWindow) {
+        guard let mainScreen = NSScreen.main else { return }
+        
+        // 获取主屏幕的可见区域（考虑Dock和菜单栏）
+        let visibleFrame = mainScreen.visibleFrame
+        
+        // 计算中心点位置
+        let x = visibleFrame.midX - window.frame.width / 2
+        let y = visibleFrame.midY - window.frame.height / 2
+        
+        // 设置窗口位置
+        window.setFrame(NSRect(x: x, y: y, width: window.frame.width, height: window.frame.height), display: true, animate: false)
     }
     
     func closeSettings() {

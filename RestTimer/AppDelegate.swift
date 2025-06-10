@@ -45,12 +45,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc func handleScreenUnlock() {
-        if TimerManager.shared.isPaused {
-            TimerManager.shared.togglePause()
-            // 通过 TimerManager 获取 statusBarManager
-            if let statusBarManager = TimerManager.shared.statusBarManager {
-                statusBarManager.updatePauseMenuItem()
-            }
+        // 屏幕解锁时，重置计时器
+        TimerManager.shared.resetTimer()
+        // 通过 TimerManager 获取 statusBarManager
+        if let statusBarManager = TimerManager.shared.statusBarManager {
+            statusBarManager.updatePauseMenuItem()
         }
     }
     

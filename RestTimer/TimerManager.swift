@@ -382,7 +382,7 @@ internal class TimerManager: ObservableObject {
             // 添加半透明黑色背景层
             let overlayView = NSView(frame: visualEffectView.bounds)
             overlayView.wantsLayer = true
-            overlayView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
+            overlayView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.5).cgColor
             visualEffectView.addSubview(overlayView)
             
             // 创并配置 SwiftUI 休息视图
