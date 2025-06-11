@@ -1,0 +1,40 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      
+      - name: Build app
+        run: |
+          xcodebuild -project RestTimer.xcodeproj -scheme RestTimer -configuration Release -derivedDataPath ./build
+          
+      - name: Create app bundle
+        run: |
+          mkdir -p ./artifacts
+          cp -R ./build/Build/Products/Release/RestTimer.app ./artifacts/
+          cd ./artifacts
+          zip -r RestTimer.zip RestTimer.app
+      
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./artifacts/RestTimer.zip
+          name: RestTimer ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true 

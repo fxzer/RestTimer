@@ -89,11 +89,28 @@ Command + R
 
 ## 打包
 
+### 手动打包
+
 ```bash
 # 在 Xcode 中选择 "Product" > "Archive"
 # 在打开的 Organizer 窗口中选择 "Distribute App"
 # 按照提示导出 .app 文件
 ```
+
+### 使用脚本打包
+
+我们提供了一个简单的脚本来构建和打包应用：
+
+```bash
+# 运行构建脚本
+./build_app.sh
+```
+
+脚本将在 `./output` 目录中生成 `RestTimer.app` 和 `RestTimer.zip` 文件。
+
+### 发布到 GitHub
+
+关于如何将应用发布到 GitHub Releases，请参阅 [RELEASE.md](./RELEASE.md) 文档。
 
 
 ## 贡献指南
