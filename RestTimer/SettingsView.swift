@@ -56,125 +56,188 @@ struct SettingsView: View {
     
     var body: some View {
         VStack(spacing: 20) {
-            Form {
-                Toggle("开机自启动", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { newValue in
-                        toggleLaunchAtLogin(enabled: newValue)
+            // 基本设置模块
+            VStack(spacing: 15) {
+                Text("基本设置")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.bottom, 5)
+                
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("开机自启动")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Toggle("", isOn: $launchAtLogin)
+                            .onChange(of: launchAtLogin) { newValue in
+                                toggleLaunchAtLogin(enabled: newValue)
+                            }
+                            .toggleStyle(SwitchToggleStyle(tint: .blue))
                     }
-                    .toggleStyle(SwitchToggleStyle(tint: .blue))
-                    .padding(.vertical, 5)
-                
-                Toggle("显示跳过按钮", isOn: $showSkipButton)
-                    .onChange(of: showSkipButton) { newValue in
-                        timerManager.showSkipButton = newValue
+                    
+                    HStack {
+                        Text("显示跳过按钮")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Toggle("", isOn: $showSkipButton)
+                            .onChange(of: showSkipButton) { newValue in
+                                timerManager.showSkipButton = newValue
+                            }
+                            .toggleStyle(SwitchToggleStyle(tint: .blue))
                     }
-                    .toggleStyle(SwitchToggleStyle(tint: .blue))
-                    .padding(.vertical, 5)
+                    
+                    HStack {
+                        Text("显示程序坞图标")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Toggle("", isOn: $timerManager.showDockIcon)
+                            .toggleStyle(SwitchToggleStyle(tint: .blue))
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 18)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(NSColor.controlBackgroundColor))
+                        .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                )
+            }
+            .frame(maxWidth: .infinity)
+            
+            // 时间设置模块
+            VStack(spacing: 15) {
+                Text("时间设置")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.bottom, 5)
                 
-                Toggle("显示程序坞图标", isOn: $timerManager.showDockIcon)
-                    .toggleStyle(SwitchToggleStyle(tint: .blue))
-                    .padding(.vertical, 5)
-                
-                HStack {
-                    Text("专注时长")
-                        .frame(width: 80, alignment: .leading)
-                    
-                    Spacer()
-                    
-                    CustomTextField(text: $workMinutes, onEditingChanged: { newValue in
-                        if let minutes = Int(newValue), minutes >= 0 {
-                            timerManager.workDurationMinutes = minutes
+                VStack(spacing: 16) {
+                    HStack {
+                        Text("专注时长")
+                            .frame(width: 80, alignment: .leading)
+                            .font(.system(size: 14, weight: .medium))
+                        
+                        Spacer()
+                        
+                        HStack(spacing: 8) {
+                            CustomTextField(text: $workMinutes, onEditingChanged: { _ in })
+                                .frame(width: 45)
+                            Text("分")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                            CustomTextField(text: $workSeconds, onEditingChanged: { _ in })
+                                .frame(width: 45)
+                            Text("秒")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
                         }
-                    })
-                    .frame(width: 40)
+                    }
                     
-                    Text("分")
-                        .fixedSize()
-                    
-                    CustomTextField(text: $workSeconds, onEditingChanged: { newValue in
-                        if let seconds = Int(newValue), seconds >= 0 && seconds < 60 {
-                            timerManager.workDurationSeconds = seconds
+                    HStack {
+                        Text("提前提醒")
+                            .frame(width: 80, alignment: .leading)
+                            .font(.system(size: 14, weight: .medium))
+                        
+                        Spacer()
+                        
+                        HStack(spacing: 8) {
+                            CustomTextField(text: $earlyNotifyMinutes, onEditingChanged: { _ in })
+                                .frame(width: 45)
+                            Text("分")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                            CustomTextField(text: $earlyNotifySeconds, onEditingChanged: { _ in })
+                                .frame(width: 45)
+                            Text("秒")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
                         }
-                    })
-                    .frame(width: 40)
+                    }
                     
-                    Text("秒")
-                        .fixedSize()
+                    HStack {
+                        Text("休息时长")
+                            .frame(width: 80, alignment: .leading)
+                            .font(.system(size: 14, weight: .medium))
+                        
+                        Spacer()
+                        
+                        HStack(spacing: 8) {
+                            CustomTextField(text: $breakMinutes, onEditingChanged: { _ in })
+                                .frame(width: 45)
+                            Text("分")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                            CustomTextField(text: $breakSeconds, onEditingChanged: { _ in })
+                                .frame(width: 45)
+                            Text("秒")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    // 按钮组
+                    HStack(spacing: 14) {
+                        Button(action: {
+                            resetTimeSettings()
+                        }) {
+                            Text("重置")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.primary)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(Color(NSColor.controlBackgroundColor))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                        )
+                                )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        Button(action: {
+                            applyTimeSettings()
+                        }) {
+                            Text("应用")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(Color.blue)
+                                        .shadow(color: Color.blue.opacity(0.2), radius: 2, x: 0, y: 1)
+                                )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    .padding(.top, 6)
                 }
-                .padding(.vertical, 5)
-                
-                HStack {
-                    Text("提前提醒")
-                        .frame(width: 80, alignment: .leading)
-                    
-                    Spacer()
-                    
-                    CustomTextField(text: $earlyNotifyMinutes, onEditingChanged: { newValue in
-                        if let minutes = Int(newValue), minutes >= 0 {
-                            timerManager.earlyNotifyMinutes = minutes
-                            validateEarlyNotifyDuration()
-                        }
-                    })
-                    .frame(width: 40)
-                    
-                    Text("分")
-                        .fixedSize()
-                    
-                    CustomTextField(text: $earlyNotifySeconds, onEditingChanged: { newValue in
-                        if let seconds = Int(newValue), seconds >= 0 && seconds < 60 {
-                            timerManager.earlyNotifySeconds = seconds
-                            validateEarlyNotifyDuration()
-                        }
-                    })
-                    .frame(width: 40)
-                    
-                    Text("秒")
-                        .fixedSize()
-                }
-                .padding(.vertical, 5)
-
-                HStack {
-                    Text("休息时长")
-                        .frame(width: 80, alignment: .leading)
-                    
-                    Spacer()
-                    
-                    CustomTextField(text: $breakMinutes, onEditingChanged: { newValue in
-                        if let minutes = Int(newValue), minutes >= 0 {
-                            timerManager.breakDurationMinutes = minutes
-                        }
-                    })
-                    .frame(width: 40)
-                    
-                    Text("分")
-                        .fixedSize()
-                    
-                    CustomTextField(text: $breakSeconds, onEditingChanged: { newValue in
-                        if let seconds = Int(newValue), seconds >= 0 && seconds < 60 {
-                            timerManager.breakDurationSeconds = seconds
-                        }
-                    })
-                    .frame(width: 40)
-                    
-                    Text("秒")
-                        .fixedSize()
-                }
-                .padding(.vertical, 5)
-
-                // 添加警告提示
-                .alert("设置错误", isPresented: $coordinator.showAlert) {
-                    Button("确定", action: {})
-                        .buttonStyle(.borderedProminent)
-                        .tint(.blue)
-                } message: {
-                    Text(coordinator.alertMessage)
-                }
-                }
-                .formStyle(.grouped)
-                .padding()
-       
+                .padding(.horizontal, 24)
+                .padding(.vertical, 18)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(NSColor.controlBackgroundColor))
+                        .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                )
+            }
+            .frame(maxWidth: .infinity)
+            
+            Spacer()
         }
-        .frame(width: 400, height: 380)
+        .padding(24)
+        .frame(width: 420, height: 480)
+        .alert("设置错误", isPresented: $coordinator.showAlert) {
+            Button("确定", action: {})
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+        } message: {
+            Text(coordinator.alertMessage)
+        }
     }
     
     private func toggleLaunchAtLogin(enabled: Bool) {
@@ -193,7 +256,49 @@ struct SettingsView: View {
         }
     }
 
-    // 添加验证方法
+    private func applyTimeSettings() {
+        // 验证输入值
+        guard let workMin = Int(workMinutes), workMin >= 0,
+              let workSec = Int(workSeconds), workSec >= 0, workSec < 60,
+              let breakMin = Int(breakMinutes), breakMin >= 0,
+              let breakSec = Int(breakSeconds), breakSec >= 0, breakSec < 60,
+              let earlyMin = Int(earlyNotifyMinutes), earlyMin >= 0,
+              let earlySec = Int(earlyNotifySeconds), earlySec >= 0, earlySec < 60 else {
+            coordinator.alertMessage = "请输入有效的时间值"
+            coordinator.showAlert = true
+            return
+        }
+        
+        // 验证提前提醒时长不能大于或等于专注时长
+        let earlyNotifyTotal = earlyMin * 60 + earlySec
+        let workTotal = workMin * 60 + workSec
+        
+        if earlyNotifyTotal >= workTotal {
+            coordinator.alertMessage = "提前提醒时长不能大于或等于专注时长"
+            coordinator.showAlert = true
+            return
+        }
+        
+        // 应用设置
+        timerManager.workDurationMinutes = workMin
+        timerManager.workDurationSeconds = workSec
+        timerManager.breakDurationMinutes = breakMin
+        timerManager.breakDurationSeconds = breakSec
+        timerManager.earlyNotifyMinutes = earlyMin
+        timerManager.earlyNotifySeconds = earlySec
+    }
+    
+    private func resetTimeSettings() {
+        // 重置为默认值
+        workMinutes = "25"
+        workSeconds = "0"
+        breakMinutes = "3"
+        breakSeconds = "0"
+        earlyNotifyMinutes = "2"
+        earlyNotifySeconds = "0"
+    }
+    
+    // 验证提前提醒时长的辅助方法
     private func validateEarlyNotifyDuration() {
         if !timerManager.isValidEarlyNotifyDuration() {
             let alert = NSAlert()
@@ -225,6 +330,8 @@ struct CustomTextField: NSViewRepresentable {
         textField.bezelStyle = .roundedBezel
         textField.font = .systemFont(ofSize: NSFont.systemFontSize)
         textField.controlSize = .regular
+        
+        
         return textField
     }
     
