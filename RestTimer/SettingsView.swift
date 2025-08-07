@@ -92,6 +92,14 @@ struct SettingsView: View {
                         Toggle("", isOn: $timerManager.showDockIcon)
                             .toggleStyle(SwitchToggleStyle(tint: .blue))
                     }
+                    
+                    HStack {
+                        Text("检测媒体播放暂停")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Toggle("", isOn: $timerManager.enableMediaDetection)
+                            .toggleStyle(SwitchToggleStyle(tint: .blue))
+                    }
+                    .help("检测到网页视频、音乐播放时自动暂停计时器")
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 18)

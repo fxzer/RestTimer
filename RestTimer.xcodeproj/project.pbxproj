@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		C3324EBB2D048AF0004F0DE8 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3324EBA2D048AF0004F0DE8 /* AppDelegate.swift */; };
 		C338D3582D046D58004723B0 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C338D3572D046D58004723B0 /* SettingsView.swift */; };
+		C3F4E4012D04A12000B1C3E7 /* MediaPlaybackDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3F4E4002D04A12000B1C3E7 /* MediaPlaybackDetector.swift */; };
 		C3E3E30D2D03F1F200A0A60D /* RestTimerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E3E30C2D03F1F200A0A60D /* RestTimerApp.swift */; };
 		C3E3E3112D03F1F300A0A60D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3E3E3102D03F1F300A0A60D /* Assets.xcassets */; };
 		C3E3E3152D03F1F300A0A60D /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3E3E3142D03F1F300A0A60D /* Preview Assets.xcassets */; };
@@ -40,6 +41,7 @@
 /* Begin PBXFileReference section */
 		C3324EBA2D048AF0004F0DE8 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C338D3572D046D58004723B0 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		C3F4E4002D04A12000B1C3E7 /* MediaPlaybackDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPlaybackDetector.swift; sourceTree = "<group>"; };
 		C3E3E3092D03F1F200A0A60D /* RestTimer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RestTimer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C3E3E30C2D03F1F200A0A60D /* RestTimerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestTimerApp.swift; sourceTree = "<group>"; };
 		C3E3E3102D03F1F300A0A60D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -106,6 +108,7 @@
 				C3324EBA2D048AF0004F0DE8 /* AppDelegate.swift */,
 				C3E3E30C2D03F1F200A0A60D /* RestTimerApp.swift */,
 				C3E3E3372D03F26500A0A60D /* TimerManager.swift */,
+				C3F4E4002D04A12000B1C3E7 /* MediaPlaybackDetector.swift */,
 				C3E3E3392D03F28000A0A60D /* BreakView.swift */,
 				C3E3E33B2D03FF7E00A0A60D /* StatusBarManager.swift */,
 				C338D3572D046D58004723B0 /* SettingsView.swift */,
@@ -273,6 +276,7 @@
 			files = (
 				C3324EBB2D048AF0004F0DE8 /* AppDelegate.swift in Sources */,
 				C3E3E3382D03F26500A0A60D /* TimerManager.swift in Sources */,
+				C3F4E4012D04A12000B1C3E7 /* MediaPlaybackDetector.swift in Sources */,
 				C3E3E33C2D03FF7E00A0A60D /* StatusBarManager.swift in Sources */,
 				C338D3582D046D58004723B0 /* SettingsView.swift in Sources */,
 				C3E3E33A2D03F28000A0A60D /* BreakView.swift in Sources */,

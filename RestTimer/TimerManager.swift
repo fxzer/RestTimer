@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import SwiftUI
+import Combine
 
 internal class TimerManager: ObservableObject {
     static let shared = TimerManager()
@@ -15,6 +16,19 @@ internal class TimerManager: ObservableObject {
         }
     }
     @Published var lastWorkStartTime: TimeInterval = Date().timeIntervalSince1970
+    
+    // 媒体播放检测相关属性
+    @Published var enableMediaDetection: Bool = true {
+        didSet {
+            if oldValue != enableMediaDetection {
+                saveSettings()
+                updateMediaDetectionState()
+            }
+        }
+    }
+    @Published var isMediaPlaying: Bool = false
+    private var mediaDetector = MediaPlaybackDetector.shared
+    private var wasAutoPausedByMedia = false
     @Published var workDurationMinutes: Int = 25 {
         didSet {
             if oldValue != workDurationMinutes {
@@ -133,6 +147,9 @@ internal class TimerManager: ObservableObject {
             guard let self = self else { return }
             self.updateDockIconVisibility()
         }
+        
+        // 设置媒体播放检测
+        setupMediaPlaybackDetection()
         
         isInitializing = false
         
@@ -667,7 +684,8 @@ internal class TimerManager: ObservableObject {
             breakDurationMinutes: breakDurationMinutes,
             breakDurationSeconds: breakDurationSeconds,
             earlyNotifyMinutes: earlyNotifyMinutes,
-            earlyNotifySeconds: earlyNotifySeconds
+            earlyNotifySeconds: earlyNotifySeconds,
+            enableMediaDetection: enableMediaDetection
         )
         
         if let encoded = try? JSONEncoder().encode(settings) {
@@ -687,6 +705,7 @@ internal class TimerManager: ObservableObject {
             breakDurationSeconds = settings.breakDurationSeconds
             earlyNotifyMinutes = settings.earlyNotifyMinutes
             earlyNotifySeconds = settings.earlyNotifySeconds
+            enableMediaDetection = settings.enableMediaDetection
         } else {
             let defaultSettings = TimerSettings.default
             showSkipButton = defaultSettings.showSkipButton
@@ -697,6 +716,7 @@ internal class TimerManager: ObservableObject {
             breakDurationSeconds = defaultSettings.breakDurationSeconds
             earlyNotifyMinutes = defaultSettings.earlyNotifyMinutes
             earlyNotifySeconds = defaultSettings.earlyNotifySeconds
+            enableMediaDetection = defaultSettings.enableMediaDetection
             
             saveSettings()
         }
@@ -711,7 +731,8 @@ internal class TimerManager: ObservableObject {
             breakDurationMinutes: breakDurationMinutes,
             breakDurationSeconds: breakDurationSeconds,
             earlyNotifyMinutes: earlyNotifyMinutes,
-            earlyNotifySeconds: earlyNotifySeconds
+            earlyNotifySeconds: earlyNotifySeconds,
+            enableMediaDetection: enableMediaDetection
         )
         
         // 如果提前提醒时间大于等于专注时间
@@ -818,6 +839,63 @@ internal class TimerManager: ObservableObject {
         // 重新开始工作定时器
         startWorkTimer()
     }
+    
+    // MARK: - 媒体播放检测相关方法
+    
+    /// 设置媒体播放检测
+    private func setupMediaPlaybackDetection() {
+        // 监听媒体播放状态变化
+        mediaDetector.$isMediaPlaying
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isPlaying in
+                self?.handleMediaPlaybackChange(isPlaying: isPlaying)
+            }
+            .store(in: &cancellables)
+        
+        // 如果启用了媒体检测，开始监听
+        updateMediaDetectionState()
+    }
+    
+    /// 更新媒体检测状态
+    private func updateMediaDetectionState() {
+        if enableMediaDetection {
+            mediaDetector.startMonitoring()
+            print("[TimerManager] 媒体播放检测已启用")
+        } else {
+            mediaDetector.stopMonitoring()
+            // 如果之前因为媒体播放而暂停，现在恢复
+            if wasAutoPausedByMedia && isPaused {
+                togglePause()
+                wasAutoPausedByMedia = false
+            }
+            print("[TimerManager] 媒体播放检测已禁用")
+        }
+    }
+    
+    /// 处理媒体播放状态变化
+    private func handleMediaPlaybackChange(isPlaying: Bool) {
+        guard enableMediaDetection else { return }
+        
+        isMediaPlaying = isPlaying
+        
+        if isPlaying {
+            // 检测到媒体播放，如果当前没有暂停且不在休息时间，则自动暂停
+            if !isPaused && !isBreakTime {
+                print("[TimerManager] 检测到媒体播放，自动暂停计时器")
+                togglePause()
+                wasAutoPausedByMedia = true
+            }
+        } else {
+            // 媒体停止播放，如果之前是因为媒体播放而暂停的，则自动恢复
+            if wasAutoPausedByMedia && isPaused {
+                print("[TimerManager] 媒体播放停止，自动恢复计时器")
+                togglePause()
+                wasAutoPausedByMedia = false
+            }
+        }
+    }
+    
+    private var cancellables = Set<AnyCancellable>()
 }
 
 private struct TimerSettings: Codable {
@@ -829,6 +907,7 @@ private struct TimerSettings: Codable {
     var breakDurationSeconds: Int
     var earlyNotifyMinutes: Int
     var earlyNotifySeconds: Int
+    var enableMediaDetection: Bool
     
     static let `default` = TimerSettings(
         showSkipButton: false,
@@ -838,7 +917,8 @@ private struct TimerSettings: Codable {
         breakDurationMinutes: 5,
         breakDurationSeconds: 0,
         earlyNotifyMinutes: 2,
-        earlyNotifySeconds: 0
+        earlyNotifySeconds: 0,
+        enableMediaDetection: true
     )
     
     // 添加一个计算总数扩展方法
