@@ -92,6 +92,7 @@ internal class TimerManager: ObservableObject {
     
     // 修改为数组以存储多个通知窗口的引用
     private var notificationWindows: [NSWindow] = []
+    private var notificationDismissToken = 0
     
     private let defaults = UserDefaults.standard
     
@@ -269,11 +270,7 @@ internal class TimerManager: ObservableObject {
             return
         }
         
-        // 关闭并清理所有已存在的通知窗口
-        notificationWindows.forEach { window in
-            window.close()
-        }
-        notificationWindows.removeAll()
+        closeNotificationWindows()
         
         // 为每个屏幕创建通知窗口
         for screen in NSScreen.screens {
@@ -308,6 +305,7 @@ internal class TimerManager: ObservableObject {
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             window.backgroundColor = .clear
             window.ignoresMouseEvents = true
+            window.alphaValue = 1
             window.contentView?.appearance = NSAppearance(named: .vibrantDark)
             
             // 设置窗口圆角
@@ -339,12 +337,24 @@ internal class TimerManager: ObservableObject {
             notificationWindows.append(window)
         }
         
-        // 3秒后关闭所有窗口
+        scheduleNotificationDismiss(for: notificationWindows)
+    }
+
+    private func closeNotificationWindows() {
+        notificationDismissToken += 1
+        notificationWindows.forEach { window in
+            window.close()
+        }
+        notificationWindows.removeAll()
+    }
+    
+    private func scheduleNotificationDismiss(for windows: [NSWindow]) {
+        let dismissToken = notificationDismissToken
+        
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-            guard let self = self else { return }
+            guard let self = self, self.notificationDismissToken == dismissToken else { return }
             
-            // 对每个窗口应用淡出动画
-            for window in self.notificationWindows {
+            for window in windows {
                 NSAnimationContext.runAnimationGroup({ context in
                     context.duration = 0.3
                     window.animator().alphaValue = 0
@@ -353,9 +363,12 @@ internal class TimerManager: ObservableObject {
                 })
             }
             
-            // 动画完成后清空数组
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.notificationWindows.removeAll()
+                guard let self = self, self.notificationDismissToken == dismissToken else { return }
+                
+                self.notificationWindows.removeAll { trackedWindow in
+                    windows.contains { $0 === trackedWindow }
+                }
             }
         }
     }
@@ -483,11 +496,7 @@ internal class TimerManager: ObservableObject {
             return
         }
         
-        // 关闭并清理所有已存在的通知窗口
-        notificationWindows.forEach { window in
-            window.close()
-        }
-        notificationWindows.removeAll()
+        closeNotificationWindows()
         
         // 计算剩余时间
         let remainingMinutes = Int(earlyNotifyDuration) / 60
@@ -532,6 +541,7 @@ internal class TimerManager: ObservableObject {
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             window.backgroundColor = .clear
             window.ignoresMouseEvents = true
+            window.alphaValue = 1
             window.contentView?.appearance = NSAppearance(named: .vibrantDark)
             
             // 设置窗口圆角
@@ -563,25 +573,7 @@ internal class TimerManager: ObservableObject {
             notificationWindows.append(window)
         }
         
-        // 3秒后关闭所有窗口
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-            guard let self = self else { return }
-            
-            // 对每个窗口应用淡出动画
-            for window in self.notificationWindows {
-                NSAnimationContext.runAnimationGroup({ context in
-                    context.duration = 0.3
-                    window.animator().alphaValue = 0
-                }, completionHandler: {
-                    window.close()
-                })
-            }
-            
-            // 动画完成后清空数组
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.notificationWindows.removeAll()
-            }
-        }
+        scheduleNotificationDismiss(for: notificationWindows)
     }
     
     func togglePause() {
@@ -597,10 +589,7 @@ internal class TimerManager: ObservableObject {
             earlyNotifyTimer = nil
             
             // 关闭前显示的通知窗口
-            if let window = notificationWindows.first {
-                window.close()
-                notificationWindows.remove(at: 0)
-            }
+            closeNotificationWindows()
             
             // 保存暂停时的剩余时间
             if isBreakTime {
@@ -795,10 +784,7 @@ internal class TimerManager: ObservableObject {
         earlyNotifyTimer = nil
         
         // 清理所有窗口
-        if let window = notificationWindows.first {
-            window.close()
-            notificationWindows.remove(at: 0)
-        }
+        closeNotificationWindows()
         
         breakWindows.forEach { window in
             window.orderOut(nil)
@@ -854,4 +840,3 @@ private struct TimerSettings: Codable {
         return totalSeconds(minutes: earlyNotifyMinutes, seconds: earlyNotifySeconds)
     }
 }
-
