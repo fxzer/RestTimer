@@ -223,7 +223,7 @@ final class StatusBarManager: NSObject, ObservableObject {
     }
 
     @objc private func showAbout() {
-        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1.0"
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1.1"
         let alert = NSAlert()
         alert.messageText = "Rest Timer"
         alert.informativeText = """
