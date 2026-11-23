@@ -1,67 +1,82 @@
 import Cocoa
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    private var screenPresence = ScreenPresenceTracker()
+
     override init() {
         super.init()
-        // 注册工作区通知
+
         NSWorkspace.shared.notificationCenter.addObserver(
             self,
-            selector: #selector(handleScreenLock),
+            selector: #selector(handleScreenSlept),
             name: NSWorkspace.screensDidSleepNotification,
             object: nil
         )
-        
+
         NSWorkspace.shared.notificationCenter.addObserver(
             self,
-            selector: #selector(handleScreenUnlock),
+            selector: #selector(handleScreenWoke),
             name: NSWorkspace.screensDidWakeNotification,
             object: nil
         )
-        
-        // 注册系统通知
+
         DistributedNotificationCenter.default().addObserver(
             self,
-            selector: #selector(handleScreenLock),
+            selector: #selector(handleScreenLocked),
             name: NSNotification.Name("com.apple.screenIsLocked"),
             object: nil
         )
-        
+
         DistributedNotificationCenter.default().addObserver(
             self,
-            selector: #selector(handleScreenUnlock),
+            selector: #selector(handleScreenUnlocked),
             name: NSNotification.Name("com.apple.screenIsUnlocked"),
             object: nil
         )
     }
-    
-    @objc func handleScreenLock() {
-        if !TimerManager.shared.isPaused {
-            TimerManager.shared.togglePause()
-            // 通过 TimerManager 获取 statusBarManager
-            if let statusBarManager = TimerManager.shared.statusBarManager {
-                statusBarManager.updatePauseMenuItem()
+
+    @objc private func handleScreenSlept() {
+        applyPresenceUpdate { $0.handleScreenSlept() }
+    }
+
+    @objc private func handleScreenWoke() {
+        applyPresenceUpdate { $0.handleScreenWoke() }
+    }
+
+    @objc private func handleScreenLocked() {
+        applyPresenceUpdate { $0.handleScreenLocked() }
+    }
+
+    @objc private func handleScreenUnlocked() {
+        applyPresenceUpdate { $0.handleScreenUnlocked() }
+    }
+
+    private func applyPresenceUpdate(_ update: @escaping (inout ScreenPresenceTracker) -> ScreenPresenceTracker.Action) {
+        let perform = { [weak self] in
+            guard let self = self else { return }
+            let action = update(&self.screenPresence)
+            switch action {
+            case .none:
+                break
+            case .pauseForSystemLock:
+                TimerManager.shared.handleSystemLock()
+            case .resetOnSystemUnlock:
+                TimerManager.shared.handleSystemUnlock()
             }
         }
-    }
-    
-    @objc func handleScreenUnlock() {
-        // 屏幕解锁时，重置计时器
-        TimerManager.shared.resetTimer()
-        // 通过 TimerManager 获取 statusBarManager
-        if let statusBarManager = TimerManager.shared.statusBarManager {
-            statusBarManager.updatePauseMenuItem()
+
+        if Thread.isMainThread {
+            perform()
+        } else {
+            DispatchQueue.main.async(execute: perform)
         }
     }
-    
+
     @objc func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if TimerManager.shared.preventQuit {
-            return .terminateCancel
-        }
-        return .terminateNow
+        TimerManager.shared.preventQuit ? .terminateCancel : .terminateNow
     }
-    
+
     deinit {
-        // 移除观察者
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         DistributedNotificationCenter.default().removeObserver(self)
     }

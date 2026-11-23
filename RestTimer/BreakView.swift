@@ -1,9 +1,11 @@
 import SwiftUI
+import Combine
 
 struct BreakView: View {
     @EnvironmentObject var timerManager: TimerManager
     @State private var randomQuote: String = ""
     @State private var currentTime = Date()
+    @State private var isHoveringSkipButton = false
     
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
@@ -89,8 +91,9 @@ struct BreakView: View {
                 .multilineTextAlignment(.center)
                 .padding()
             
-            if timerManager.showSkipButton {
+            if timerManager.settings.showSkipButton {
                 Button(action: {
+                    popCursorIfNeeded()
                     timerManager.skipBreak()
                 }) {
                     Text("跳过休息")
@@ -102,9 +105,11 @@ struct BreakView: View {
                         .overlay(Capsule().stroke(Color.white, lineWidth: 1))
                 }
                 .onHover { isHovered in
-                    if isHovered {
+                    if isHovered && !isHoveringSkipButton {
+                        isHoveringSkipButton = true
                         NSCursor.pointingHand.push()
-                    } else {
+                    } else if !isHovered && isHoveringSkipButton {
+                        isHoveringSkipButton = false
                         NSCursor.pop()
                     }
                 }
@@ -116,9 +121,18 @@ struct BreakView: View {
         .onAppear {
             randomQuote = quotes.randomElement() ?? ""
         }
+        .onDisappear {
+            popCursorIfNeeded()
+        }
         .onReceive(timer) { input in
             currentTime = input
         }
+    }
+    
+    private func popCursorIfNeeded() {
+        guard isHoveringSkipButton else { return }
+        isHoveringSkipButton = false
+        NSCursor.pop()
     }
     
     private func remainingTimeText() -> String {

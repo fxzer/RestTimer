@@ -2,841 +2,536 @@ import Foundation
 import AppKit
 import SwiftUI
 
-internal class TimerManager: ObservableObject {
+internal final class TimerManager: ObservableObject {
     static let shared = TimerManager()
-    
-    @Published var isBreakTime = false
-    @Published var remainingBreakTime: TimeInterval = 0
-    @Published var showSkipButton: Bool = false {
+
+    private static let settingsKey = "TimerSettings"
+
+    @Published private(set) var state: SessionState = .idle
+    @Published var settings: TimerSettings {
         didSet {
-            if oldValue != showSkipButton {
-                saveSettings()
-            }
+            handleSettingsDidChange(from: oldValue)
         }
-    }
-    @Published var lastWorkStartTime: TimeInterval = Date().timeIntervalSince1970
-    @Published var workDurationMinutes: Int = 25 {
-        didSet {
-            if oldValue != workDurationMinutes {
-                // 只在非初始化时进行校验
-                if !isInitializing && !isValidWorkDuration() {
-                    let alert = NSAlert()
-                    alert.messageText = "专注时长必须大于提前提醒时长"
-                    alert.alertStyle = .warning
-                    alert.addButton(withTitle: "确认")
-                    alert.runModal()
-                } else {
-                    resetWorkTimer()
-                }
-                saveSettings()
-            }
-        }
-    }
-    @Published var workDurationSeconds: Int = 0 {
-        didSet {
-            if oldValue != workDurationSeconds {
-                if !isInitializing && !isValidWorkDuration() {
-                    let alert = NSAlert()
-                    alert.messageText = "专注时长必须大于提前提醒时长"
-                    alert.alertStyle = .warning
-                    alert.addButton(withTitle: "确认")
-                    alert.runModal()
-                } else {
-                    resetWorkTimer() // 只有在条件满足时才重置计时器
-                }
-                saveSettings()
-            }
-        }
-    }
-    @Published var breakDurationMinutes: Int = 5 {
-        didSet {
-            saveSettings()
-        }
-    }
-    @Published var breakDurationSeconds: Int = 0 {
-        didSet {
-            saveSettings()
-        }
-    }
-    @Published var earlyNotifyMinutes: Int = 2 {
-        didSet {
-            saveSettings()
-        }
-    }
-    @Published var earlyNotifySeconds: Int = 0 {
-        didSet {
-            saveSettings()
-        }
-    }
-    @Published var preventQuit: Bool = false
-    @Published var isPaused: Bool = false
-    private var pausedTimeRemaining: TimeInterval?
-  
-  
-    private var workTimer: Timer?
-    private var breakTimer: Timer?
-    private var breakWindows: [NSWindow] = [] // 添加数组来存储所有显示器的休息窗口
-    
-    // 计算属性
-    var workDuration: TimeInterval {
-        TimeInterval(workDurationMinutes * 60 + workDurationSeconds)
-    }
-    
-    var breakDuration: TimeInterval {
-        TimeInterval(breakDurationMinutes * 60 + breakDurationSeconds)
-    }
-    
-    var earlyNotifyDuration: TimeInterval {
-        TimeInterval(earlyNotifyMinutes * 60 + earlyNotifySeconds)
-    }
-    
-    // 修改为数组以存储多个通知窗口的引用
-    private var notificationWindows: [NSWindow] = []
-    private var notificationDismissToken = 0
-    
-    private let defaults = UserDefaults.standard
-    
-    // 添加一个标志来标识是否在初始化过程中
-    private var isInitializing = true
-    
-    // 添加 statusBarManager 属性
-    weak var statusBarManager: StatusBarManager?
-    
-    @Published var showDockIcon: Bool {
-        didSet {
-            if oldValue != showDockIcon {
-                saveSettings()
-                // 确保在主线程执行，并立即更新 Dock 图标状态
-                DispatchQueue.main.async { [weak self] in
-                    self?.updateDockIconVisibility()
-                }
-            }
-        }
-    }
-    
-    // 添加一个属性来跟踪提前提醒的定时器
-    private var earlyNotifyTimer: Timer?
-    
-    private init() {
-        // 从 UserDefaults 读取设置
-        if let data = UserDefaults.standard.data(forKey: "TimerSettings"),
-           let settings = try? JSONDecoder().decode(TimerSettings.self, from: data) {
-            self.showDockIcon = settings.showDockIcon
-        } else {
-            self.showDockIcon = true
-        }
-        
-        isInitializing = true
-        loadSettings()
-        
-        // 初始化完成后立即应用 Dock 图标状态
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.updateDockIconVisibility()
-        }
-        
-        isInitializing = false
-        
-        // 延迟初始化定时器...
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.startWorkTimer()
-        }
-    }
-    
-    func skipBreak() {
-        cleanupAndEndBreak()
-    }
-    
-    private func cleanupAndEndBreak() {
-        // 确保在主线程执行
-        if !Thread.isMainThread {
-            DispatchQueue.main.async { [weak self] in
-                self?.cleanupAndEndBreak()
-            }
-            return
-        }
-        
-        // 清理所有定时器
-        workTimer?.invalidate()
-        workTimer = nil
-        breakTimer?.invalidate()
-        breakTimer = nil
-        
-        // 关闭所有休息窗口
-        breakWindows.forEach { window in
-            window.orderOut(nil)
-        }
-        breakWindows.removeAll()
-        
-        // 重置状态
-        isBreakTime = false
-        remainingBreakTime = 0
-        
-        // 重新开始工作定时器
-        startWorkTimer()
-        
-        preventQuit = false
-    }
-    
-    private func startBreak() {
-        // 如果当前是暂停状态，不要启动休息
-        if isPaused {
-            return
-        }
-        
-        // 确保在主线程执行
-        if !Thread.isMainThread {
-            DispatchQueue.main.async { [weak self] in
-                self?.startBreak()
-            }
-            return
-        }
-        
-        // 清理现有定时器
-        breakTimer?.invalidate()
-        breakTimer = nil
-        
-        isBreakTime = true
-        remainingBreakTime = breakDuration
-        
-        // 建并显示窗口
-        createAndShowBreakWindow()
-        
-        // 创建新的定时器
-        breakTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
-            guard let self = self else {
-                timer.invalidate()
-                return
-            }
-            
-            DispatchQueue.main.async {
-                if self.remainingBreakTime > 0 {
-                    self.remainingBreakTime -= 1
-                } else {
-                    self.cleanupAndEndBreak()
-                    timer.invalidate()
-                }
-            }
-        }
-        
-        preventQuit = true
-    }
-    
-    private func startWorkTimer() {
-        // 如果当前是暂停状态，不要启动计时器
-        if isPaused {
-            return
-        }
-        
-        // 确保在主线程执行
-        if !Thread.isMainThread {
-            DispatchQueue.main.async { [weak self] in
-                self?.startWorkTimer()
-            }
-            return
-        }
-        
-        // 清理所有定时器
-        workTimer?.invalidate()
-        workTimer = nil
-        earlyNotifyTimer?.invalidate()
-        earlyNotifyTimer = nil
-        
-        lastWorkStartTime = Date().timeIntervalSince1970
-        
-        // 显示开始专注的通知
-        showStartWorkNotification()
-        
-        // 设置提前提醒的定时器
-        if earlyNotifyDuration > 0 && !isInitializing {
-            let earlyNotifyDelay = workDuration - earlyNotifyDuration
-            earlyNotifyTimer = Timer.scheduledTimer(withTimeInterval: earlyNotifyDelay, repeats: false) { [weak self] _ in
-                self?.showEarlyNotification()
-            }
-        }
-        
-        // 设置工作结束的定时器
-        workTimer = Timer.scheduledTimer(withTimeInterval: workDuration, repeats: false) { [weak self] _ in
-            self?.startBreak()
-        }
-    }
-    
-    private func showStartWorkNotification() {
-        // 确保在主线程执行
-        guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in
-                self?.showStartWorkNotification()
-            }
-            return
-        }
-        
-        closeNotificationWindows()
-        
-        // 为每个屏幕创建通知窗口
-        for screen in NSScreen.screens {
-            // 创建并配置通知视图
-            let notificationContent = VStack {
-                Text("开始专注")
-                    .font(.system(size: 40, weight: .bold))
-                    .foregroundColor(.white)
-            }
-            .frame(width: 200, height: 200)
-            .background(Color.black.opacity(0.4))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            
-            // 使用 NSHostingController 来管理 SwiftUI 视图
-            let hostingController = NSHostingController(rootView: notificationContent)
-            hostingController.view.wantsLayer = true
-            
-            // 创建并配置窗口 - 确保窗口大小与内容大小一致
-            let contentSize = CGSize(width: 200, height: 200)
-            let window = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: contentSize.width, height: contentSize.height),
-                styleMask: [.borderless, .nonactivatingPanel],
-                backing: .buffered,
-                defer: false
-            )
-            
-            // 配置窗口属性
-            window.contentViewController = hostingController
-            window.isOpaque = false
-            window.hasShadow = true
-            window.level = .statusBar
-            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            window.backgroundColor = .clear
-            window.ignoresMouseEvents = true
-            window.alphaValue = 1
-            window.contentView?.appearance = NSAppearance(named: .vibrantDark)
-            
-            // 设置窗口圆角
-            window.contentView?.wantsLayer = true
-            window.contentView?.layer?.cornerRadius = 12
-            window.contentView?.layer?.masksToBounds = true
-            
-            // 获取屏幕尺寸
-            let screenFrame = screen.frame
-            
-            // 先确保窗口尺寸正确
-            window.contentViewController?.view.layout()
-            window.contentViewController?.view.layoutSubtreeIfNeeded()
-            
-            // 计算居中位置
-            let windowSize = window.frame.size
-            let centerX = screenFrame.origin.x + screenFrame.width / 2
-            let centerY = screenFrame.origin.y + screenFrame.height / 2
-            
-            // 计算左下角坐标（macOS坐标系原点在左下角）
-            let originX = centerX - windowSize.width / 2 - 100
-            let originY = centerY - windowSize.height / 2
-            
-            // 先设置位置，然后再显示窗口
-            window.setFrameOrigin(NSPoint(x: originX, y: originY))
-            window.orderFront(nil)
-            
-            // 保存窗口引用
-            notificationWindows.append(window)
-        }
-        
-        scheduleNotificationDismiss(for: notificationWindows)
     }
 
-    private func closeNotificationWindows() {
-        notificationDismissToken += 1
-        notificationWindows.forEach { window in
-            window.close()
-        }
-        notificationWindows.removeAll()
+    private let activityMonitor: ActivityMonitor
+    private let preBreakHud = PreBreakHudManager()
+    private let toastOverlay = NotificationOverlayManager()
+    private let breakWindowManager = BreakWindowManager()
+
+    private var workTimer: Timer?
+    private var earlyNotifyTimer: Timer?
+    private var breakTimer: Timer?
+    private var activityCheckTimer: Timer?
+    private var startupWorkItem: DispatchWorkItem?
+    private var dockPolicyWorkItem: DispatchWorkItem?
+    private var isAdjustingSettings = false
+
+    // MARK: - 派生属性（全部源自单一状态机与配置，杜绝镜像失步）
+
+    var isPaused: Bool { state.isPaused }
+    var isBreakTime: Bool { state.isBreaking }
+    var preventQuit: Bool { state.preventQuit }
+    var remainingBreakTime: TimeInterval { state.remainingBreakTime }
+    var pendingOverdueSeconds: TimeInterval { state.pendingOverdueSeconds }
+
+    var workDuration: TimeInterval { TimeInterval(settings.workTotalSeconds) }
+    var breakDuration: TimeInterval { TimeInterval(settings.breakTotalSeconds) }
+    var earlyNotifyDuration: TimeInterval { TimeInterval(settings.earlyNotifyTotalSeconds) }
+
+    var smartDelayConfig: SmartDelayConfig {
+        SmartDelayConfig(
+            enabled: settings.smartDelayEnabled,
+            monitorKeyboard: settings.monitorKeyboard,
+            monitorMouse: settings.monitorMouse,
+            idleDelaySeconds: settings.idleDelaySeconds,
+            maxDelayMinutes: settings.maxDelayMinutes,
+            showPreBreakCountdown: settings.showPreBreakCountdown,
+            autoResetOnIdle: settings.autoResetOnIdle
+        )
     }
-    
-    private func scheduleNotificationDismiss(for windows: [NSWindow]) {
-        let dismissToken = notificationDismissToken
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-            guard let self = self, self.notificationDismissToken == dismissToken else { return }
-            
-            for window in windows {
-                NSAnimationContext.runAnimationGroup({ context in
-                    context.duration = 0.3
-                    window.animator().alphaValue = 0
-                }, completionHandler: {
-                    window.close()
-                })
+
+    // MARK: - 初始化
+
+    init(
+        activityMonitor: ActivityMonitor = ActivityMonitor(),
+        autoStart: Bool = true
+    ) {
+        self.activityMonitor = activityMonitor
+
+        let loadedSettings: TimerSettings
+        if let data = UserDefaults.standard.data(forKey: Self.settingsKey),
+           let decoded = try? JSONDecoder().decode(TimerSettings.self, from: data) {
+            loadedSettings = decoded
+        } else {
+            loadedSettings = .default
+            if let encoded = try? JSONEncoder().encode(loadedSettings) {
+                UserDefaults.standard.set(encoded, forKey: Self.settingsKey)
             }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                guard let self = self, self.notificationDismissToken == dismissToken else { return }
-                
-                self.notificationWindows.removeAll { trackedWindow in
-                    windows.contains { $0 === trackedWindow }
+        }
+        self.settings = loadedSettings
+
+        if autoStart {
+            scheduleDockIconUpdate()
+            let item = DispatchWorkItem { [weak self] in
+                guard let self = self, self.state == .idle else { return }
+                self.transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: true)
+            }
+            startupWorkItem = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: item)
+        }
+    }
+
+    deinit {
+        startupWorkItem?.cancel()
+        dockPolicyWorkItem?.cancel()
+        invalidateAllTimers()
+        preBreakHud.hide()
+        toastOverlay.dismissImmediately()
+        breakWindowManager.hide()
+    }
+
+    // MARK: - 公共操作入口
+
+    func skipBreak() {
+        runOnMain {
+            self.transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: true)
+        }
+    }
+
+    func startBreakImmediately() {
+        runOnMain {
+            guard !self.state.isBreaking else { return }
+            self.startupWorkItem?.cancel()
+            self.startupWorkItem = nil
+            self.transition(to: .breaking(remaining: self.breakDuration))
+        }
+    }
+
+    func toggleManualPause() {
+        runOnMain {
+            if self.state.isPaused {
+                self.resume()
+            } else {
+                self.pause(reason: .manual)
+            }
+        }
+    }
+
+    func pause(reason: PauseReason) {
+        runOnMain {
+            self.startupWorkItem?.cancel()
+            self.startupWorkItem = nil
+
+            let now = Date().timeIntervalSince1970
+            switch self.state {
+            case .idle:
+                let snapshot = PauseSnapshot.working(remaining: self.workDuration)
+                self.transition(to: .paused(snapshot: snapshot, reason: reason))
+
+            case .working(let startedAt):
+                let remaining = max(0, self.workDuration - (now - startedAt))
+                self.transition(to: .paused(snapshot: .working(remaining: remaining), reason: reason))
+
+            case .pendingBreak(let startedAt, _):
+                let overdue = max(0, now - startedAt)
+                self.transition(to: .paused(snapshot: .pendingBreak(overdue: overdue), reason: reason))
+
+            case .breaking(let remaining):
+                self.transition(to: .paused(snapshot: .breaking(remaining: remaining), reason: reason))
+
+            case .away:
+                self.transition(to: .paused(snapshot: .away, reason: reason))
+
+            case .paused(_, let existingReason):
+                // 不允许系统锁屏覆盖用户主动暂停的原因
+                if existingReason == .manual && reason == .systemLocked {
+                    return
                 }
             }
         }
     }
-    
-    private func createAndShowBreakWindow() {
-        // 清理现有的窗口
-        breakWindows.forEach { window in
-            window.orderOut(nil)
-        }
-        breakWindows.removeAll()
-        
-        // 为每个屏幕创建休息窗口
-        for screen in NSScreen.screens {
-            let window = NSWindow(
-                contentRect: screen.frame,
-                styleMask: [.borderless],
-                backing: .buffered,
-                defer: false
-            )
-            
-            window.level = .screenSaver
-            window.isOpaque = false
-            window.hasShadow = false
-            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            window.acceptsMouseMovedEvents = true
-            
-            // 创建一个视觉效果视图作为背景
-            let visualEffectView = NSVisualEffectView(frame: window.contentView?.bounds ?? .zero)
-            visualEffectView.material = .fullScreenUI  // 使用语义化材质 .hudWindow 替代废弃的 .dark
-            visualEffectView.blendingMode = .behindWindow
-            visualEffectView.state = .active
-            visualEffectView.wantsLayer = true
-            
-            // 添加半透明黑色背景层
-            let overlayView = NSView(frame: visualEffectView.bounds)
-            overlayView.wantsLayer = true
-            overlayView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.4).cgColor
-            visualEffectView.addSubview(overlayView)
-            
-            // 创并配置 SwiftUI 休息视图
-            let breakView = BreakView()
-                .environmentObject(self)
-            let hostingView = NSHostingView(rootView: breakView)
-            hostingView.frame = visualEffectView.bounds
-            
-            // 组合视图层次
-            visualEffectView.addSubview(hostingView)
-            window.contentView = visualEffectView
-            
-            // 设置窗口位置到对应屏幕
-            window.setFrame(screen.frame, display: true)
-            
-            // 保存窗口引用
-            breakWindows.append(window)
-            
-            // 显示窗口
-            window.makeKeyAndOrderFront(nil)
-        }
-        
-        // 激活应用
-        NSApplication.shared.activate(ignoringOtherApps: true)
-    }
-    
-    deinit {
-        cleanupAndEndBreak()
-    }
-    
-    // 添加获取当前活动屏幕的方法
-    private func getCurrentScreen() -> NSScreen? {
-        // 1. 首先尝试获取鼠标所在屏幕
-        let mouseLocation = NSEvent.mouseLocation
-        let mouseScreen = NSScreen.screens.first { screen in
-            screen.frame.contains(mouseLocation)
-        }
-        
-        if let screen = mouseScreen {
-            return screen
-        }
-        
-        // 2. 果没有找到鼠标所在屏幕，尝试获取当前激活窗口在屏幕
-        if let keyWindow = NSApp.keyWindow,
-           let windowScreen = keyWindow.screen {
-            return windowScreen
-        }
-        
-        // 3. 如果都没有，返回主屏幕
-        return NSScreen.main
-    }
-    
-    func resetWorkTimer() {
-        // 确保在主线程执行
-        if !Thread.isMainThread {
-            DispatchQueue.main.async { [weak self] in
-                self?.resetWorkTimer()
+
+    func resume() {
+        runOnMain {
+            guard case .paused(let snapshot, _) = self.state else { return }
+            let now = Date().timeIntervalSince1970
+
+            switch snapshot {
+            case .working(let remaining):
+                if remaining <= 0 {
+                    self.handleWorkExpiredFromResume()
+                } else {
+                    let adjustedStart = now - (self.workDuration - remaining)
+                    self.transition(to: .working(startedAt: adjustedStart), notifyWorkStart: false)
+                }
+
+            case .pendingBreak(let overdue):
+                let adjustedStart = now - max(0, overdue)
+                self.transition(to: .pendingBreak(startedAt: adjustedStart, overdue: max(0, overdue)))
+
+            case .breaking(let remaining):
+                if remaining <= 0 {
+                    self.transition(to: .working(startedAt: now), notifyWorkStart: true)
+                } else {
+                    self.transition(to: .breaking(remaining: remaining))
+                }
+
+            case .away:
+                self.transition(to: .working(startedAt: now), notifyWorkStart: true)
             }
-            return
         }
-        
-        // 清理现有定时器
-        workTimer?.invalidate()
-        workTimer = nil
-        
-        // 重新开始工作定时器
-        lastWorkStartTime = Date().timeIntervalSince1970
-        startWorkTimer()
     }
-    
-    func isValidEarlyNotifyDuration() -> Bool {
-        let totalEarlySeconds = earlyNotifyMinutes * 60 + earlyNotifySeconds
-        let totalWorkSeconds = workDurationMinutes * 60 + workDurationSeconds
-        return totalEarlySeconds < totalWorkSeconds
+
+    func handleSystemLock() {
+        pause(reason: .systemLocked)
     }
-    
-    private func showEarlyNotification() {
-        // 如果当前是暂停状态，不显示提醒
-        if isPaused {
-            return
-        }
-        
-        // 确保在主线程执行
-        guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in
-                self?.showEarlyNotification()
+
+    func handleSystemUnlock() {
+        runOnMain {
+            // 保留用户在锁屏前主动触发的手动暂停
+            if case .paused(_, .manual) = self.state {
+                return
             }
-            return
+            self.resetTimer()
         }
-        
-        closeNotificationWindows()
-        
-        // 计算剩余时间
-        let remainingMinutes = Int(earlyNotifyDuration) / 60
-        let remainingSeconds = Int(earlyNotifyDuration) % 60
-        
-        // 为每个屏幕创建通知窗口
-        for screen in NSScreen.screens {
-            // 创建并配置通知视图
-            let notificationContent = VStack {
-                Text("\(remainingMinutes)分\(remainingSeconds)秒后")
-                    .font(.system(size: 30, weight: .bold))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                    .padding(.bottom, 10)
-                Text("将进入休息")
-                    .font(.system(size: 30, weight: .bold))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(width: 250, height: 150)
-            .background(Color.black.opacity(0.4))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            
-            // 使用 NSHostingController 管理 SwiftUI 视图
-            let hostingController = NSHostingController(rootView: notificationContent)
-            hostingController.view.wantsLayer = true
-            
-            // 创建并配置窗口 - 确保窗口大小与内容大小一致
-            let contentSize = CGSize(width: 250, height: 150)
-            let window = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: contentSize.width, height: contentSize.height),
-                styleMask: [.borderless, .nonactivatingPanel],
-                backing: .buffered,
-                defer: false
-            )
-            
-            // 配置窗口属性
-            window.contentViewController = hostingController
-            window.isOpaque = false
-            window.hasShadow = true
-            window.level = .statusBar
-            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            window.backgroundColor = .clear
-            window.ignoresMouseEvents = true
-            window.alphaValue = 1
-            window.contentView?.appearance = NSAppearance(named: .vibrantDark)
-            
-            // 设置窗口圆角
-            window.contentView?.wantsLayer = true
-            window.contentView?.layer?.cornerRadius = 12
-            window.contentView?.layer?.masksToBounds = true
-            
-            // 获取屏幕尺寸
-            let screenFrame = screen.frame
-            
-            // 先确保窗口尺寸正确
-            window.contentViewController?.view.layout()
-            window.contentViewController?.view.layoutSubtreeIfNeeded()
-            
-            // 计算居中位置
-            let windowSize = window.frame.size
-            let centerX = screenFrame.origin.x + screenFrame.width / 2
-            let centerY = screenFrame.origin.y + screenFrame.height / 2
-            
-            // 计算左下角坐标（macOS坐标系原点在左下角）
-            let originX = centerX - windowSize.width / 2 - 100
-            let originY = centerY - windowSize.height / 2
-            
-            // 先设置位置，然后再显示窗口
-            window.setFrameOrigin(NSPoint(x: originX, y: originY))
-            window.orderFront(nil)
-            
-            // 保存窗口引用
-            notificationWindows.append(window)
-        }
-        
-        scheduleNotificationDismiss(for: notificationWindows)
     }
-    
-    func togglePause() {
-        isPaused.toggle()
-        
-        if isPaused {
-            // 暂停时，停止所有计时器和提醒
-            workTimer?.invalidate()
-            workTimer = nil
+
+    func resetTimer() {
+        runOnMain {
+            self.startupWorkItem?.cancel()
+            self.startupWorkItem = nil
+            self.transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: true)
+        }
+    }
+
+    /// 原子校验并更新所有时间设置，避免逐字段修改触发中间非法状态
+    @discardableResult
+    func updateTimeSettings(
+        workMinutes: Int,
+        workSeconds: Int,
+        breakMinutes: Int,
+        breakSeconds: Int,
+        earlyMinutes: Int,
+        earlySeconds: Int
+    ) -> Result<Void, TimeSettingsValidationError> {
+        let validation = TimerSettings.validateTimeValues(
+            workMinutes: workMinutes,
+            workSeconds: workSeconds,
+            breakMinutes: breakMinutes,
+            breakSeconds: breakSeconds,
+            earlyMinutes: earlyMinutes,
+            earlySeconds: earlySeconds
+        )
+
+        guard case .success = validation else {
+            return validation
+        }
+
+        let workChanged = settings.workDurationMinutes != workMinutes
+            || settings.workDurationSeconds != workSeconds
+            || settings.earlyNotifyMinutes != earlyMinutes
+            || settings.earlyNotifySeconds != earlySeconds
+
+        var updated = settings
+        updated.workDurationMinutes = workMinutes
+        updated.workDurationSeconds = workSeconds
+        updated.breakDurationMinutes = breakMinutes
+        updated.breakDurationSeconds = breakSeconds
+        updated.earlyNotifyMinutes = earlyMinutes
+        updated.earlyNotifySeconds = earlySeconds
+        settings = updated
+
+        if workChanged && !state.isBreaking && !state.isPaused {
+            resetTimer()
+        }
+
+        return .success(())
+    }
+
+    // MARK: - 状态机唯一转换入口
+
+    private func transition(to newState: SessionState, notifyWorkStart: Bool = false) {
+        assert(Thread.isMainThread, "SessionState transitions must happen on main thread")
+
+        invalidateAllTimers()
+        state = newState
+
+        switch newState {
+        case .idle:
+            breakWindowManager.hide()
+            preBreakHud.hide()
+            toastOverlay.dismissImmediately()
+
+        case .working(let startedAt):
+            breakWindowManager.hide()
+            preBreakHud.hide()
+            activityMonitor.resetBaseline()
+
+            let now = Date().timeIntervalSince1970
+            let remaining = max(0, workDuration - (now - startedAt))
+            if remaining <= 0 {
+                handleWorkTimerExpired()
+                return
+            }
+
+            if notifyWorkStart {
+                toastOverlay.show(.workStarted)
+            }
+
+            if earlyNotifyDuration > 0 && remaining > earlyNotifyDuration {
+                let delay = remaining - earlyNotifyDuration
+                earlyNotifyTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+                    self?.showEarlyNotification()
+                }
+            }
+
+            workTimer = Timer.scheduledTimer(withTimeInterval: remaining, repeats: false) { [weak self] _ in
+                self?.handleWorkTimerExpired()
+            }
+
+            startActivityCheckTimer(interval: 1.0)
+
+        case .pendingBreak:
+            breakWindowManager.hide()
+            toastOverlay.dismissImmediately()
+            startActivityCheckTimer(interval: 0.5)
+            evaluateActivityTick()
+
+        case .breaking:
+            preBreakHud.hide()
+            toastOverlay.dismissImmediately()
+            breakWindowManager.show(timerManager: self)
+
+            breakTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+                guard let self = self else {
+                    timer.invalidate()
+                    return
+                }
+                self.handleBreakTick()
+            }
+
+        case .away:
+            breakWindowManager.hide()
+            preBreakHud.hide()
+            startActivityCheckTimer(interval: 1.0)
+
+        case .paused:
+            breakWindowManager.hide()
+            preBreakHud.hide()
+            toastOverlay.dismissImmediately()
+        }
+    }
+
+    // MARK: - 内部事件处理
+
+    private func handleBreakTick() {
+        guard case .breaking(let remaining) = state else {
             breakTimer?.invalidate()
             breakTimer = nil
-            earlyNotifyTimer?.invalidate()
-            earlyNotifyTimer = nil
-            
-            // 关闭前显示的通知窗口
-            closeNotificationWindows()
-            
-            // 保存暂停时的剩余时间
-            if isBreakTime {
-                pausedTimeRemaining = remainingBreakTime
-            } else {
-                pausedTimeRemaining = workDuration - (Date().timeIntervalSince1970 - lastWorkStartTime)
-            }
-        } else {
-            // 恢复时，更新开始时间并重新启动计时器
-            if let remaining = pausedTimeRemaining {
-                if isBreakTime {
-                    // 如果是休息时间
-                    remainingBreakTime = remaining
-                    breakTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
-                        guard let self = self else {
-                            timer.invalidate()
-                            return
-                        }
-                        
-                        DispatchQueue.main.async {
-                            if self.remainingBreakTime > 0 {
-                                self.remainingBreakTime -= 1
-                            } else {
-                                self.cleanupAndEndBreak()
-                                timer.invalidate()
-                            }
-                        }
-                    }
-                } else {
-                    // 如果是工作时间
-                    lastWorkStartTime = Date().timeIntervalSince1970 - (workDuration - remaining)
-                    
-                    // 创建新的工作计时器
-                    workTimer = Timer.scheduledTimer(withTimeInterval: remaining, repeats: false) { [weak self] _ in
-                        self?.startBreak()
-                    }
-                    
-                    // 如果还需要提前提醒，也要重新设置
-                    if remaining > earlyNotifyDuration {
-                        let earlyNotifyDelay = remaining - earlyNotifyDuration
-                        earlyNotifyTimer = Timer.scheduledTimer(withTimeInterval: earlyNotifyDelay, repeats: false) { [weak self] _ in
-                            self?.showEarlyNotification()
-                        }
-                    }
-                }
-            }
-            pausedTimeRemaining = nil
-        }
-        
-        // 更新状态栏菜单
-        statusBarManager?.updatePauseMenuItem()
-    }
-    
-    func getRemainingPausedTime() -> TimeInterval? {
-        return pausedTimeRemaining
-    }
-    
-    private func saveSettings() {
-        let settings = TimerSettings(
-            showSkipButton: showSkipButton,
-            showDockIcon: showDockIcon,
-            workDurationMinutes: workDurationMinutes,
-            workDurationSeconds: workDurationSeconds,
-            breakDurationMinutes: breakDurationMinutes,
-            breakDurationSeconds: breakDurationSeconds,
-            earlyNotifyMinutes: earlyNotifyMinutes,
-            earlyNotifySeconds: earlyNotifySeconds
-        )
-        
-        if let encoded = try? JSONEncoder().encode(settings) {
-            UserDefaults.standard.set(encoded, forKey: "TimerSettings")
-            UserDefaults.standard.synchronize() // 强制同步保存
-        }
-    }
-    
-    private func loadSettings() {
-        if let data = UserDefaults.standard.data(forKey: "TimerSettings"),
-           let settings = try? JSONDecoder().decode(TimerSettings.self, from: data) {
-            // 不要在这里设置 showDockIcon，因为它已经在 init 中设置过了
-            showSkipButton = settings.showSkipButton
-            workDurationMinutes = settings.workDurationMinutes
-            workDurationSeconds = settings.workDurationSeconds
-            breakDurationMinutes = settings.breakDurationMinutes
-            breakDurationSeconds = settings.breakDurationSeconds
-            earlyNotifyMinutes = settings.earlyNotifyMinutes
-            earlyNotifySeconds = settings.earlyNotifySeconds
-        } else {
-            let defaultSettings = TimerSettings.default
-            showSkipButton = defaultSettings.showSkipButton
-            // showDockIcon 已经在 init 中设置过了
-            workDurationMinutes = defaultSettings.workDurationMinutes
-            workDurationSeconds = defaultSettings.workDurationSeconds
-            breakDurationMinutes = defaultSettings.breakDurationMinutes
-            breakDurationSeconds = defaultSettings.breakDurationSeconds
-            earlyNotifyMinutes = defaultSettings.earlyNotifyMinutes
-            earlyNotifySeconds = defaultSettings.earlyNotifySeconds
-            
-            saveSettings()
-        }
-    }
-    
-    private func validateAndAdjustEarlyNotify() {
-        let settings = TimerSettings(
-            showSkipButton: showSkipButton,
-            showDockIcon: showDockIcon,
-            workDurationMinutes: workDurationMinutes,
-            workDurationSeconds: workDurationSeconds,
-            breakDurationMinutes: breakDurationMinutes,
-            breakDurationSeconds: breakDurationSeconds,
-            earlyNotifyMinutes: earlyNotifyMinutes,
-            earlyNotifySeconds: earlyNotifySeconds
-        )
-        
-        // 如果提前提醒时间大于等于专注时间
-        if settings.earlyNotifyTotalSeconds >= settings.workTotalSeconds {
-            // 将提前提醒时间设置为专注时间的一半或默认值(2分钟)取较小值
-            let halfWorkSeconds = settings.workTotalSeconds / 2
-            let defaultEarlyNotifySeconds = 2 * 60 // 2分钟
-            let newEarlyNotifySeconds = min(halfWorkSeconds, defaultEarlyNotifySeconds)
-            
-            earlyNotifyMinutes = newEarlyNotifySeconds / 60
-            earlyNotifySeconds = newEarlyNotifySeconds % 60
-            
-            // 通知用户设置已被调整
-            NotificationCenter.default.post(
-                name: NSNotification.Name("EarlyNotifyAdjusted"),
-                object: nil,
-                userInfo: ["message": "提前提醒时间已自动调整为\(earlyNotifyMinutes)分\(earlyNotifySeconds)秒"]
-            )
-        }
-    }
-    
-    // 添加一个验证方法
-    private func isValidWorkDuration() -> Bool {
-        let workTotalSeconds = workDurationMinutes * 60 + workDurationSeconds
-        let earlyNotifyTotalSeconds = earlyNotifyMinutes * 60 + earlyNotifySeconds
-        return workTotalSeconds > earlyNotifyTotalSeconds
-    }
-    
-    private func updateDockIconVisibility() {
-        // 确保在主线程执行
-        if !Thread.isMainThread {
-            DispatchQueue.main.async { [weak self] in
-                self?.updateDockIconVisibility()
-            }
             return
         }
-        
-        // 先更新激活策略
-        if showDockIcon {
-            if NSApp.activationPolicy() != .regular {
-                NSApp.setActivationPolicy(.regular)
-            }
+
+        if remaining > 1 {
+            state = .breaking(remaining: remaining - 1)
         } else {
-            if NSApp.activationPolicy() != .accessory {
-                NSApp.setActivationPolicy(.accessory)
+            transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: true)
+        }
+    }
+
+    private func handleWorkTimerExpired() {
+        guard case .working = state else { return }
+        handleWorkExpiredFromResume()
+    }
+
+    private func handleWorkExpiredFromResume() {
+        let config = smartDelayConfig
+        guard config.enabled && config.hasAnyMonitorEnabled else {
+            transition(to: .breaking(remaining: breakDuration))
+            return
+        }
+
+        let currentIdle = activityMonitor.idleDuration(
+            monitorKeyboard: config.monitorKeyboard,
+            monitorMouse: config.monitorMouse
+        )
+        if currentIdle >= TimeInterval(max(1, config.idleDelaySeconds)) {
+            transition(to: .breaking(remaining: breakDuration))
+            return
+        }
+
+        transition(to: .pendingBreak(startedAt: Date().timeIntervalSince1970, overdue: 0))
+    }
+
+    private func showEarlyNotification() {
+        guard case .working = state else { return }
+        let total = Int(earlyNotifyDuration)
+        toastOverlay.show(.earlyWarning(minutes: total / 60, seconds: total % 60))
+    }
+
+    private func evaluateActivityTick() {
+        assert(Thread.isMainThread)
+
+        switch state {
+        case .working(let startedAt):
+            if settings.smartDelayEnabled && settings.monitorMouse {
+                activityMonitor.sampleMouseMovement()
+            }
+            if settings.autoResetOnIdle {
+                let idle = activityMonitor.idleDuration(monitorKeyboard: true, monitorMouse: true)
+                let elapsedWork = Date().timeIntervalSince1970 - startedAt
+                if BreakDelayEvaluator.shouldEnterAwayState(
+                    elapsedWork: elapsedWork,
+                    idleElapsed: idle,
+                    breakDuration: breakDuration,
+                    autoResetEnabled: settings.autoResetOnIdle
+                ) {
+                    transition(to: .away)
+                }
+            }
+
+        case .away:
+            let idle = activityMonitor.idleDuration(monitorKeyboard: true, monitorMouse: true)
+            if BreakDelayEvaluator.shouldResumeFromAway(idleElapsed: idle) {
+                transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: true)
+            }
+
+        case .pendingBreak(let startedAt, _):
+            let config = smartDelayConfig
+            guard config.enabled && config.hasAnyMonitorEnabled else {
+                transition(to: .breaking(remaining: breakDuration))
+                return
+            }
+
+            let overdue = max(0, Date().timeIntervalSince1970 - startedAt)
+            state = .pendingBreak(startedAt: startedAt, overdue: overdue)
+
+            let idle = activityMonitor.idleDuration(
+                monitorKeyboard: config.monitorKeyboard,
+                monitorMouse: config.monitorMouse
+            )
+            let decision = BreakDelayEvaluator.evaluatePendingBreak(
+                overdue: overdue,
+                idleElapsed: idle,
+                config: config
+            )
+
+            switch decision {
+            case .waiting:
+                preBreakHud.hide()
+            case .countdown(let secondsLeft, let reason, _):
+                preBreakHud.showOrUpdate(secondsLeft: secondsLeft, reason: reason)
+            case .triggerBreak:
+                transition(to: .breaking(remaining: breakDuration))
+            }
+
+        case .idle, .breaking, .paused:
+            stopActivityCheckTimer()
+        }
+    }
+
+    // MARK: - 配置变更与持久化
+
+    private func handleSettingsDidChange(from oldValue: TimerSettings) {
+        guard !isAdjustingSettings else { return }
+
+        let clampedIdle = min(max(settings.idleDelaySeconds, 3), 120)
+        let clampedMaxDelay = max(0, settings.maxDelayMinutes)
+        if clampedIdle != settings.idleDelaySeconds || clampedMaxDelay != settings.maxDelayMinutes {
+            isAdjustingSettings = true
+            settings.idleDelaySeconds = clampedIdle
+            settings.maxDelayMinutes = clampedMaxDelay
+            isAdjustingSettings = false
+        }
+
+        guard settings != oldValue else { return }
+        saveSettings()
+
+        if settings.showDockIcon != oldValue.showDockIcon {
+            scheduleDockIconUpdate()
+        }
+
+        if !settings.showPreBreakCountdown && oldValue.showPreBreakCountdown {
+            preBreakHud.hide()
+        }
+
+        if !settings.autoResetOnIdle && state == .away {
+            transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: true)
+        }
+
+        if case .pendingBreak = state {
+            let config = smartDelayConfig
+            if !config.enabled || !config.hasAnyMonitorEnabled {
+                transition(to: .breaking(remaining: breakDuration))
             }
         }
-        
-        // 使用 async 延迟执行窗口更新，确保激活策略已经生效
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            // 先激活应用
-            NSApp.activate(ignoringOtherApps: true)
-            
-            // 等待短暂延迟后再更新窗口
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                // 更新所有窗口
+    }
+
+    private func saveSettings() {
+        if let encoded = try? JSONEncoder().encode(settings) {
+            UserDefaults.standard.set(encoded, forKey: Self.settingsKey)
+        }
+    }
+
+    /// 可取消的 Dock 策略切换，避免快速切换开关时多层 asyncAfter 互相踩踏
+    private func scheduleDockIconUpdate() {
+        dockPolicyWorkItem?.cancel()
+
+        let showDock = settings.showDockIcon
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            let targetPolicy: NSApplication.ActivationPolicy = showDock ? .regular : .accessory
+            if NSApp.activationPolicy() != targetPolicy {
+                NSApp.setActivationPolicy(targetPolicy)
+            }
+
+            let activateItem = DispatchWorkItem {
+                NSApp.activate(ignoringOtherApps: true)
                 NSApp.windows.forEach { window in
                     if window.isVisible {
                         window.orderFront(nil)
                     }
                 }
             }
+            self.dockPolicyWorkItem = activateItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: activateItem)
         }
+
+        dockPolicyWorkItem = workItem
+        DispatchQueue.main.async(execute: workItem)
     }
-    
-    func resetTimer() {
-        // 确保在主线程执行
-        if !Thread.isMainThread {
-            DispatchQueue.main.async { [weak self] in
-                self?.resetTimer()
-            }
-            return
+
+    // MARK: - 定时器与线程辅助
+
+    private func startActivityCheckTimer(interval: TimeInterval) {
+        stopActivityCheckTimer()
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            self?.evaluateActivityTick()
         }
-        
-        // 清理所有现有定时器
+        RunLoop.main.add(timer, forMode: .common)
+        activityCheckTimer = timer
+    }
+
+    private func stopActivityCheckTimer() {
+        activityCheckTimer?.invalidate()
+        activityCheckTimer = nil
+    }
+
+    private func invalidateAllTimers() {
         workTimer?.invalidate()
         workTimer = nil
-        breakTimer?.invalidate()
-        breakTimer = nil
         earlyNotifyTimer?.invalidate()
         earlyNotifyTimer = nil
-        
-        // 清理所有窗口
-        closeNotificationWindows()
-        
-        breakWindows.forEach { window in
-            window.orderOut(nil)
-        }
-        breakWindows.removeAll()
-        
-        // 重置状态
-        lastWorkStartTime = Date().timeIntervalSince1970
-        isPaused = false
-        isBreakTime = false
-        remainingBreakTime = 0
-        pausedTimeRemaining = nil
-        
-        // 更新状态栏菜单项
-        statusBarManager?.updatePauseMenuItem()
-        
-        // 重新开始工作定时器
-        startWorkTimer()
+        breakTimer?.invalidate()
+        breakTimer = nil
+        stopActivityCheckTimer()
     }
-}
 
-private struct TimerSettings: Codable {
-    var showSkipButton: Bool
-    var showDockIcon: Bool
-    var workDurationMinutes: Int
-    var workDurationSeconds: Int 
-    var breakDurationMinutes: Int
-    var breakDurationSeconds: Int
-    var earlyNotifyMinutes: Int
-    var earlyNotifySeconds: Int
-    
-    static let `default` = TimerSettings(
-        showSkipButton: false,
-        showDockIcon: true,
-        workDurationMinutes: 25,
-        workDurationSeconds: 0,
-        breakDurationMinutes: 5,
-        breakDurationSeconds: 0,
-        earlyNotifyMinutes: 2,
-        earlyNotifySeconds: 0
-    )
-    
-    // 添加一个计算总数扩展方法
-    func totalSeconds(minutes: Int, seconds: Int) -> Int {
-        return minutes * 60 + seconds
-    }
-    
-    var workTotalSeconds: Int {
-        return totalSeconds(minutes: workDurationMinutes, seconds: workDurationSeconds)
-    }
-    
-    var earlyNotifyTotalSeconds: Int {
-        return totalSeconds(minutes: earlyNotifyMinutes, seconds: earlyNotifySeconds)
+    private func runOnMain(_ block: @escaping () -> Void) {
+        if Thread.isMainThread {
+            block()
+        } else {
+            DispatchQueue.main.async(execute: block)
+        }
     }
 }
