@@ -12,6 +12,14 @@ final class StatusBarManager: NSObject, ObservableObject {
     private weak var breakNowMenuItem: NSMenuItem?
     private weak var pauseMenuItem: NSMenuItem?
 
+    // 菜单栏图标与标题增量渲染缓存，消除每秒临时对象分配抖动
+    private var cachedRingImage: NSImage?
+    private var lastProgressStep: Int = -1
+    private var lastIsPaused: Bool = false
+    private var lastIsBreaking: Bool = false
+    private var lastAttributedTitleText: String = ""
+    private var lastAttributedColor: NSColor?
+
     init(timerManager: TimerManager) {
         self.timerManager = timerManager
         super.init()
@@ -179,69 +187,88 @@ final class StatusBarManager: NSObject, ObservableObject {
     private func updateButtonDisplay(for state: SessionState) {
         guard let button = statusItem?.button else { return }
 
-        let timeFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        let normalAttributes: [NSAttributedString.Key: Any] = [.font: timeFont]
-
         switch state {
         case .idle:
-            button.image = makeProgressRingImage(progress: 1.0, isPaused: false, isBreaking: false)
-            button.attributedTitle = NSAttributedString(string: "--:--", attributes: normalAttributes)
+            setButtonImageIfNeeded(progress: 1.0, isPaused: false, isBreaking: false)
+            setButtonTitleIfNeeded("--:--")
 
         case .paused:
             if let pausedTime = state.pausedRemainingTime, pausedTime > 0 {
                 let total = max(1.0, timerManager.workDuration)
-                button.image = makeProgressRingImage(progress: min(1.0, pausedTime / total), isPaused: true, isBreaking: false)
-                button.attributedTitle = NSAttributedString(
-                    string: formatTime(Int(pausedTime)),
-                    attributes: normalAttributes
-                )
+                setButtonImageIfNeeded(progress: min(1.0, pausedTime / total), isPaused: true, isBreaking: false)
+                setButtonTitleIfNeeded(formatTime(Int(pausedTime)))
             } else {
-                button.image = makeProgressRingImage(progress: 0.0, isPaused: true, isBreaking: false)
-                button.attributedTitle = NSAttributedString(string: "暂停", attributes: normalAttributes)
+                setButtonImageIfNeeded(progress: 0.0, isPaused: true, isBreaking: false)
+                setButtonTitleIfNeeded("暂停")
             }
 
         case .pendingBreak(_, let overdue):
-            button.image = makeProgressRingImage(progress: 0.08, isPaused: false, isBreaking: false)
+            setButtonImageIfNeeded(progress: 0.08, isPaused: false, isBreaking: false)
             if timerManager.isDeferredByDND {
-                let dndAttributes: [NSAttributedString.Key: Any] = [
-                    .font: timeFont,
-                    .foregroundColor: NSColor.secondaryLabelColor
-                ]
-                button.attributedTitle = NSAttributedString(string: "免打扰", attributes: dndAttributes)
+                setButtonTitleIfNeeded("免打扰", color: NSColor.secondaryLabelColor)
             } else {
-                let pendingAttributes: [NSAttributedString.Key: Any] = [
-                    .font: timeFont,
-                    .foregroundColor: NSColor.systemOrange
-                ]
-                button.attributedTitle = NSAttributedString(
-                    string: "+\(formatTime(max(0, Int(overdue))))",
-                    attributes: pendingAttributes
-                )
+                setButtonTitleIfNeeded("+\(formatTime(max(0, Int(overdue))))", color: NSColor.systemOrange)
             }
 
         case .away:
-            button.image = makeProgressRingImage(progress: 0.0, isPaused: true, isBreaking: false)
-            button.attributedTitle = NSAttributedString(string: "离开", attributes: normalAttributes)
+            setButtonImageIfNeeded(progress: 0.0, isPaused: true, isBreaking: false)
+            setButtonTitleIfNeeded("离开")
 
         case .breaking(let remaining):
             let total = max(1.0, timerManager.breakDuration)
-            button.image = makeProgressRingImage(progress: min(1.0, max(0.0, remaining / total)), isPaused: false, isBreaking: true)
-            button.attributedTitle = NSAttributedString(
-                string: formatTime(max(0, Int(remaining))),
-                attributes: normalAttributes
-            )
+            setButtonImageIfNeeded(progress: min(1.0, max(0.0, remaining / total)), isPaused: false, isBreaking: true)
+            setButtonTitleIfNeeded(formatTime(max(0, Int(remaining))))
 
         case .working(let startedAt):
             let total = max(1.0, timerManager.workDuration)
             let remainingDouble = max(0.0, total - (Date().timeIntervalSince1970 - startedAt))
-            button.image = makeProgressRingImage(progress: min(1.0, remainingDouble / total), isPaused: false, isBreaking: false)
+            setButtonImageIfNeeded(progress: min(1.0, remainingDouble / total), isPaused: false, isBreaking: false)
             let remaining = Int(remainingDouble)
             let title = remaining > 0 ? formatTime(remaining) : "00:00"
-            button.attributedTitle = NSAttributedString(string: title, attributes: normalAttributes)
+            setButtonTitleIfNeeded(title)
         }
 
         button.imagePosition = .imageLeft
         button.imageScaling = .scaleProportionallyDown
+    }
+
+    private func setButtonTitleIfNeeded(_ title: String, color: NSColor? = nil) {
+        guard let button = statusItem?.button else { return }
+        if title == lastAttributedTitleText && color == lastAttributedColor {
+            return
+        }
+        lastAttributedTitleText = title
+        lastAttributedColor = color
+
+        let timeFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        var attrs: [NSAttributedString.Key: Any] = [.font: timeFont]
+        if let color = color {
+            attrs[.foregroundColor] = color
+        }
+        button.attributedTitle = NSAttributedString(string: title, attributes: attrs)
+    }
+
+    private func setButtonImageIfNeeded(progress: Double, isPaused: Bool, isBreaking: Bool) {
+        guard let button = statusItem?.button else { return }
+        let clamped = min(1.0, max(0.0, progress))
+        let step = Int(round(clamped * 100.0))
+
+        if step == lastProgressStep && isPaused == lastIsPaused && isBreaking == lastIsBreaking,
+           let cached = cachedRingImage {
+            if button.image !== cached {
+                button.image = cached
+            }
+            return
+        }
+
+        let newImage = autoreleasepool {
+            makeProgressRingImage(progress: clamped, isPaused: isPaused, isBreaking: isBreaking)
+        }
+        cachedRingImage = newImage
+        lastProgressStep = step
+        lastIsPaused = isPaused
+        lastIsBreaking = isBreaking
+        button.image = newImage
     }
 
     /// 动态绘制 macOS 原生模板风格倒计时圆环图标（支持深浅色菜单栏自动反色）
@@ -370,12 +397,19 @@ final class WindowManager: ObservableObject {
 
     func showSettings(timerManager: TimerManager) {
         switch windowState {
-        case .visible(let window), .hidden(let window):
+        case .visible(let window):
             window.setContentSize(NSSize(width: SettingsTokens.windowWidth, height: SettingsTokens.windowHeight))
             window.makeKeyAndOrderFront(nil)
             centerWindowOnMainScreen(window)
             NSApplication.shared.activate(ignoringOtherApps: true)
-            windowState = .visible(window)
+
+        case .hidden(let window):
+            // 旧的隐藏窗口先脱钩释放，重新构建全新轻量实例
+            window.orderOut(nil)
+            window.contentViewController = nil
+            window.contentView = nil
+            window.close()
+            fallthrough
 
         case .notCreated:
             let controller = NSHostingController(
@@ -406,10 +440,13 @@ final class WindowManager: ObservableObject {
 
     func closeSettings() {
         switch windowState {
-        case .visible(let window):
+        case .visible(let window), .hidden(let window):
             window.orderOut(nil)
-            windowState = .hidden(window)
-        case .hidden, .notCreated:
+            window.contentViewController = nil
+            window.contentView = nil
+            window.close()
+            windowState = .notCreated
+        case .notCreated:
             break
         }
     }
@@ -432,7 +469,11 @@ final class WindowDelegate: NSObject, NSWindowDelegate {
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         WindowManager.shared.closeSettings()
-        return false
+        return true
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        WindowManager.shared.closeSettings()
     }
 }
 

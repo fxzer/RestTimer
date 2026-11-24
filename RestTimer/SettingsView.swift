@@ -47,17 +47,9 @@ struct SettingsView: View {
         }
     }
 
-    private var currentWorkMinutes: Int {
-        min(60, max(1, timerManager.settings.workDurationMinutes))
-    }
-
-    private var currentEarlyMinutes: Int {
-        timerManager.settings.earlyNotifyMinutes
-    }
-
-    private var currentBreakTotalSeconds: Int {
-        max(60, timerManager.settings.breakTotalSeconds)
-    }
+    private var currentWorkMinutes: Int { min(60, max(1, timerManager.settings.workDurationMinutes)) }
+    private var currentEarlyMinutes: Int { timerManager.settings.earlyNotifyMinutes }
+    private var currentBreakTotalSeconds: Int { max(60, timerManager.settings.breakTotalSeconds) }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -66,17 +58,13 @@ struct SettingsView: View {
             ZStack(alignment: .top) {
                 switch activeTab {
                 case .clockAndRhythm:
-                    clockAndRhythmTab
-                        .transition(.opacity)
+                    clockAndRhythmTab.transition(.opacity)
                 case .smartDelay:
-                    smartDelayTab
-                        .transition(.opacity)
+                    smartDelayTab.transition(.opacity)
                 case .appearanceAndGeneral:
-                    appearanceAndGeneralTab
-                        .transition(.opacity)
+                    appearanceAndGeneralTab.transition(.opacity)
                 case .statistics:
-                    BreakStatsView()
-                        .transition(.opacity)
+                    BreakStatsView().transition(.opacity)
                 }
             }
             .frame(height: SettingsTokens.tabContentHeight, alignment: .top)
@@ -85,12 +73,9 @@ struct SettingsView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .frame(width: SettingsTokens.windowWidth, height: SettingsTokens.windowHeight, alignment: .top)
-        .onAppear {
-            syncLaunchAtLoginStatus()
-        }
+        .onAppear { syncLaunchAtLoginStatus() }
         .alert("设置提示", isPresented: $showAlert) {
-            Button("确定", action: {})
-                .buttonStyle(.borderedProminent)
+            Button("确定", action: {}).buttonStyle(.borderedProminent)
         } message: {
             Text(alertMessage)
         }
@@ -431,25 +416,16 @@ struct SettingsView: View {
 
                         Spacer()
 
-                        SettingsPillButton(
-                            title: BreakGradientTheme.autoDayNight.displayName,
-                            isSelected: timerManager.settings.breakGradientTheme == .autoDayNight
-                        ) {
+                        SettingsPillButton(title: BreakGradientTheme.autoDayNight.displayName, isSelected: timerManager.settings.breakGradientTheme == .autoDayNight) {
                             timerManager.settings.breakGradientTheme = .autoDayNight
                         }
                         .frame(width: 68)
                     }
 
                     // 3 列 × 3 行矩形可视化主题预览矩阵（极淡静音系 -> 柔和护眼系 -> 静谧深色系）
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 3),
-                        spacing: 7
-                    ) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 3), spacing: 7) {
                         ForEach(BreakGradientTheme.concreteThemes, id: \.self) { theme in
-                            BreakThemePreviewCardView(
-                                theme: theme,
-                                isSelected: timerManager.settings.breakGradientTheme == theme
-                            ) {
+                            BreakThemePreviewCardView(theme: theme, isSelected: timerManager.settings.breakGradientTheme == theme) {
                                 timerManager.settings.breakGradientTheme = theme
                                 timerManager.startBreakPreview()
                             }
@@ -464,23 +440,16 @@ struct SettingsView: View {
 
     // MARK: - NexWan 极简设置行
 
-    private func settingsToggleRow(
-        icon: String,
-        title: String,
-        isOn: Binding<Bool>
-    ) -> some View {
+    private func settingsToggleRow(icon: String, title: String, isOn: Binding<Bool>) -> some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Color.accentColor)
                 .frame(width: 18)
-
             Text(title)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(Color(nsColor: .labelColor))
-
             Spacer()
-
             Toggle("", isOn: isOn)
                 .labelsHidden()
                 .toggleStyle(.switch)
@@ -512,11 +481,8 @@ struct SettingsView: View {
     private func applyLaunchAtLogin(enabled: Bool) {
         if #available(macOS 13.0, *) {
             do {
-                if enabled {
-                    try SMAppService.mainApp.register()
-                } else {
-                    try SMAppService.mainApp.unregister()
-                }
+                if enabled { try SMAppService.mainApp.register() }
+                else { try SMAppService.mainApp.unregister() }
                 launchAtLogin = SMAppService.mainApp.status == .enabled
             } catch {
                 launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -524,8 +490,7 @@ struct SettingsView: View {
                 showAlert = true
             }
         } else {
-            let success = SMLoginItemSetEnabled("fxzer.top.RestTimer" as CFString, enabled)
-            if success {
+            if SMLoginItemSetEnabled("fxzer.top.RestTimer" as CFString, enabled) {
                 launchAtLogin = enabled
             }
         }

@@ -88,6 +88,80 @@ extension BreakGradientTheme {
     }
 }
 
+/// 插图内存降采样硬件解码器与极简受限缓存（将 1792×2400 原图在内存中按目标 255×340 @2x 降采样，单张位图占用由 17.2MB 骤降至 1.38MB）
+final class ExerciseImageLoader {
+    static let shared = ExerciseImageLoader()
+
+    private let cache = NSCache<NSString, NSImage>()
+
+    private init() {
+        cache.countLimit = 4 // 最多缓存 4 张当前动作与相邻招式缩略图
+        cache.totalCostLimit = 8 * 1024 * 1024 // 上限 8MB
+    }
+
+    /// 针对 Retina 2x 屏幕，将 255×340 pt 解码为 510×680 像素
+    func loadThumbnail(named assetName: String, targetPixelWidth: Int = 510, targetPixelHeight: Int = 680) -> NSImage? {
+        let key = assetName as NSString
+        if let cached = cache.object(forKey: key) {
+            return cached
+        }
+
+        guard let sourceImage = NSImage(named: assetName) else {
+            return nil
+        }
+
+        var proposedRect = NSRect(
+            x: 0,
+            y: 0,
+            width: CGFloat(targetPixelWidth) / 2.0,
+            height: CGFloat(targetPixelHeight) / 2.0
+        )
+        guard let cgImage = sourceImage.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil) else {
+            return sourceImage
+        }
+
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        guard let context = CGContext(
+            data: nil,
+            width: targetPixelWidth,
+            height: targetPixelHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: targetPixelWidth * 4,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        ) else {
+            return sourceImage
+        }
+
+        context.interpolationQuality = .high
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: targetPixelWidth, height: targetPixelHeight))
+        guard let downsampledCG = context.makeImage() else {
+            return sourceImage
+        }
+
+        let logicalSize = NSSize(
+            width: CGFloat(targetPixelWidth) / 2.0,
+            height: CGFloat(targetPixelHeight) / 2.0
+        )
+        let resultImage = NSImage(cgImage: downsampledCG, size: logicalSize)
+
+        // 从 AppKit 命名图片池解绑，防止 17.2MB 原始大图永久常驻系统缓存
+        sourceImage.setName(nil)
+
+        // 存入受限缩略图缓存，单张 cost 约为 510 * 680 * 4 ≈ 1.38MB
+        let cost = targetPixelWidth * targetPixelHeight * 4
+        cache.setObject(resultImage, forKey: key, cost: cost)
+
+        return resultImage
+    }
+
+    /// 休息结束窗口关闭时主动清空全部解码图片缓存
+    func purge() {
+        cache.removeAllObjects()
+    }
+}
+
 /// 极简大尺寸办公室拉伸动作展示舞台（锁定 255×340 严格 3:4 比例，悬浮时左右浮现清爽半透明切换钮）
 struct BreakExerciseHeroView: View {
     let exercise: StretchExercise
@@ -101,10 +175,11 @@ struct BreakExerciseHeroView: View {
 
     var body: some View {
         ZStack {
-            // 中央 255×340 3:4 插图（浅色主题下采用极淡柔影+细描边，深色主题下采用通透软影）
+            // 中央 255×340 3:4 插图（降采样加载，浅色主题下采用极淡柔影+细描边，深色主题下采用通透软影）
             switch exercise.visual {
             case .fitgateIllustration(let assetName):
-                Image(assetName)
+                let thumbnail = ExerciseImageLoader.shared.loadThumbnail(named: assetName)
+                (thumbnail != nil ? Image(nsImage: thumbnail!) : Image(assetName))
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 255, height: 340)

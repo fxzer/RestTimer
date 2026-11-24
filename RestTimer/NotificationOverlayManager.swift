@@ -212,10 +212,10 @@ final class NotificationOverlayManager {
             return
         case .visible(let windows, let fadeWorkItem):
             fadeWorkItem.cancel()
-            windows.forEach { $0.close() }
+            tearDownWindows(windows)
         case .fadingOut(let windows, let cleanupWorkItem):
             cleanupWorkItem.cancel()
-            windows.forEach { $0.close() }
+            tearDownWindows(windows)
         }
         state = .hidden
     }
@@ -225,7 +225,7 @@ final class NotificationOverlayManager {
 
         let cleanupWorkItem = DispatchWorkItem { [weak self] in
             guard let self = self, case .fadingOut(let activeWindows, _) = self.state else { return }
-            activeWindows.forEach { $0.close() }
+            self.tearDownWindows(activeWindows)
             self.state = .hidden
         }
 
@@ -243,6 +243,15 @@ final class NotificationOverlayManager {
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: cleanupWorkItem)
+    }
+
+    private func tearDownWindows(_ windows: [NSWindow]) {
+        for window in windows {
+            window.orderOut(nil)
+            window.contentViewController = nil
+            window.contentView = nil
+            window.close()
+        }
     }
 
     private func makeWindowAndTargetFrame(for kind: ToastNotificationKind, on screen: NSScreen) -> (window: NSPanel, targetFrame: NSRect) {

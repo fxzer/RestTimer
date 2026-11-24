@@ -138,6 +138,7 @@ final class BreakWindowManager {
                 window.contentView = nil
                 window.close()
             }
+            ExerciseImageLoader.shared.purge()
         }
 
         if animated {

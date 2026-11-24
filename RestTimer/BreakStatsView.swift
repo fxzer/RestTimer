@@ -62,6 +62,17 @@ struct BreakStatsView: View {
         let weekTotalAttempts = weekCompleted + weekSkipped
         let weekRateText = weekTotalAttempts > 0 ? "\(Int(round(Double(weekCompleted) * 100.0 / Double(weekTotalAttempts))))%" : "--"
 
+        let todayCols = [
+            ("\(todayCompleted)次", "休息次数", todaySkipped > 0 ? "跳过 \(todaySkipped)次" : "零跳过", false),
+            (formatDuration(todayBreakSec), "休息时长", "今日累计", false),
+            (formatDuration(todayLongestSit), "最长连坐", "专注 \(formatFocusHours(todayFocusSec))", todayLongestSit >= 50 * 60)
+        ]
+        let weekCols = [
+            ("\(weekCompleted)次", "本周休息", "近 7 日累计", false),
+            (formatDuration(weekBreakSec), "累计时长", "日均 \(formatDuration(weekBreakSec / 7))", false),
+            (weekRateText, "完成率", weekSkipped > 0 ? "跳过 \(weekSkipped)次" : "全部完成", weekTotalAttempts > 0 && weekSkipped > weekCompleted)
+        ]
+
         return SettingsCardContainer {
             VStack(spacing: 8) {
                 HStack {
@@ -72,9 +83,7 @@ struct BreakStatsView: View {
                         Text("身体节律")
                             .font(.system(size: 12, weight: .medium))
                     }
-
                     Spacer()
-
                     // [今日 | 本周] 极简滑动切换
                     HStack(spacing: 2) {
                         ForEach(StatsScope.allCases) { item in
@@ -102,55 +111,14 @@ struct BreakStatsView: View {
                         }
                     }
                     .padding(2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.primary.opacity(0.045))
-                    )
+                    .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.045)))
                 }
 
                 HStack(spacing: 0) {
-                    if scope == .today {
-                        metricColumn(
-                            value: "\(todayCompleted)次",
-                            label: "休息次数",
-                            sublabel: todaySkipped > 0 ? "跳过 \(todaySkipped)次" : "零跳过",
-                            isWarning: false
-                        )
-                        verticalHairline
-                        metricColumn(
-                            value: formatDuration(todayBreakSec),
-                            label: "休息时长",
-                            sublabel: "今日累计",
-                            isWarning: false
-                        )
-                        verticalHairline
-                        metricColumn(
-                            value: formatDuration(todayLongestSit),
-                            label: "最长连坐",
-                            sublabel: "专注 \(formatFocusHours(todayFocusSec))",
-                            isWarning: todayLongestSit >= 50 * 60
-                        )
-                    } else {
-                        metricColumn(
-                            value: "\(weekCompleted)次",
-                            label: "本周休息",
-                            sublabel: "近 7 日累计",
-                            isWarning: false
-                        )
-                        verticalHairline
-                        metricColumn(
-                            value: formatDuration(weekBreakSec),
-                            label: "累计时长",
-                            sublabel: "日均 \(formatDuration(weekBreakSec / 7))",
-                            isWarning: false
-                        )
-                        verticalHairline
-                        metricColumn(
-                            value: weekRateText,
-                            label: "完成率",
-                            sublabel: weekSkipped > 0 ? "跳过 \(weekSkipped)次" : "全部完成",
-                            isWarning: weekTotalAttempts > 0 && weekSkipped > weekCompleted
-                        )
+                    let cols = scope == .today ? todayCols : weekCols
+                    ForEach(0..<cols.count, id: \.self) { idx in
+                        if idx > 0 { verticalHairline }
+                        metricColumn(value: cols[idx].0, label: cols[idx].1, sublabel: cols[idx].2, isWarning: cols[idx].3)
                     }
                 }
             }
@@ -445,6 +413,18 @@ struct BreakStatsView: View {
 
     // MARK: - 格式化与布局辅助
 
+    private static let hourMinuteFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    private static let monthDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "M月d日"
+        return f
+    }()
+
     private func heatColor(forCount count: Int) -> Color {
         switch count {
         case ...0: return Color.primary.opacity(0.055)
@@ -489,28 +469,19 @@ struct BreakStatsView: View {
         if s == 0 { return "0分" }
         if s < 60 { return "\(s)秒" }
         let mins = s / 60
-        if mins >= 60 {
-            let h = Double(mins) / 60.0
-            return String(format: "%.1fh", h)
-        }
-        return "\(mins)分"
+        return mins >= 60 ? String(format: "%.1fh", Double(mins) / 60.0) : "\(mins)分"
     }
 
     private func formatFocusHours(_ seconds: Int) -> String {
         let mins = max(0, seconds) / 60
-        if mins < 60 { return "\(mins)分" }
-        return String(format: "%.1fh", Double(mins) / 60.0)
+        return mins < 60 ? "\(mins)分" : String(format: "%.1fh", Double(mins) / 60.0)
     }
 
     private func formatHourMinute(_ timestamp: TimeInterval) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: Date(timeIntervalSince1970: timestamp))
+        Self.hourMinuteFormatter.string(from: Date(timeIntervalSince1970: timestamp))
     }
 
     private func formatMonthDay(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "M月d日"
-        return formatter.string(from: date)
+        Self.monthDayFormatter.string(from: date)
     }
 }

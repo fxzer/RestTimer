@@ -496,4 +496,21 @@ final class RestTimerTests: XCTestCase {
         }
         wait(for: [exp], timeout: 3.0)
     }
+
+    func testExerciseImageLoaderDownsamplingAndPurge() {
+        let loader = ExerciseImageLoader.shared
+        loader.purge()
+
+        let image = loader.loadThumbnail(named: "fg_01_raise_hands", targetPixelWidth: 510, targetPixelHeight: 680)
+        XCTAssertNotNil(image)
+        if let img = image {
+            XCTAssertEqual(img.size.width, 255.0)
+            XCTAssertEqual(img.size.height, 340.0)
+        }
+
+        let cached = loader.loadThumbnail(named: "fg_01_raise_hands", targetPixelWidth: 510, targetPixelHeight: 680)
+        XCTAssertTrue(image === cached)
+
+        loader.purge()
+    }
 }

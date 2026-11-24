@@ -81,7 +81,7 @@ final class PreBreakHudManager {
 
         case .visible(let panels, _, _):
             if panels.count != NSScreen.screens.count {
-                panels.forEach { $0.close() }
+                tearDownPanels(panels)
                 let rebuilt = createPanels(animated: false)
                 state = .visible(panels: rebuilt, reason: reason, secondsLeft: secondsLeft)
             } else {
@@ -111,18 +111,27 @@ final class PreBreakHudManager {
                 panel.animator().setFrame(exitFrame, display: true)
                 panel.animator().alphaValue = 0.0
             }
-        }, completionHandler: {
+        }, completionHandler: { [weak self] in
             DispatchQueue.main.async {
-                panels.forEach { $0.close() }
+                self?.tearDownPanels(panels)
             }
         })
     }
 
     private func handleScreenParametersChanged() {
         guard case .visible(let panels, let reason, let secondsLeft) = state else { return }
-        panels.forEach { $0.close() }
+        tearDownPanels(panels)
         let rebuilt = createPanels(animated: false)
         state = .visible(panels: rebuilt, reason: reason, secondsLeft: secondsLeft)
+    }
+
+    private func tearDownPanels(_ panels: [NSPanel]) {
+        for panel in panels {
+            panel.orderOut(nil)
+            panel.contentViewController = nil
+            panel.contentView = nil
+            panel.close()
+        }
     }
 
     private func updateViewModel(secondsLeft: Int, reason: CountdownReason) {

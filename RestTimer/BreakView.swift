@@ -7,7 +7,6 @@ struct BreakView: View {
     @EnvironmentObject var timerManager: TimerManager
     @Namespace private var themePillNamespace
 
-    @State private var currentTime = Date()
     @State private var currentQuote: CuratedQuote = CuratedQuoteLibrary.all[0]
     @State private var catalogIndex: Int = 0
     @State private var hasManualSwitch = false
@@ -16,9 +15,6 @@ struct BreakView: View {
     @State private var keyEventMonitor: Any?
     @State private var hoveredTheme: BreakGradientTheme?
     @State private var escapeTapTimestamps: [TimeInterval] = []
-
-    private let clockTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    private let breathTimer = Timer.publish(every: 4.0, on: .main, in: .common).autoconnect()
 
     private static var recentExerciseIds: Set<String> = []
     private static var rotationThemeIndex: Int = 0
@@ -82,20 +78,12 @@ struct BreakView: View {
         .onAppear {
             prepareBreakSession()
             installKeyboardShortcuts()
-            withAnimation(.easeInOut(duration: 4.0)) {
+            withAnimation(.easeInOut(duration: 4.0).repeatForever(autoreverses: true)) {
                 breathingIn = true
             }
         }
         .onDisappear {
             removeKeyboardShortcuts()
-        }
-        .onReceive(clockTimer) { input in
-            currentTime = input
-        }
-        .onReceive(breathTimer) { _ in
-            withAnimation(.easeInOut(duration: 3.8)) {
-                breathingIn.toggle()
-            }
         }
     }
 
@@ -103,7 +91,7 @@ struct BreakView: View {
 
     private var topControlBar: some View {
         HStack(spacing: 10) {
-            Text(currentTime.formatted(date: .omitted, time: .shortened))
+            Text(Date(), style: .time)
                 .font(.system(size: 14.5, weight: .medium, design: .rounded))
                 .foregroundColor(fgBase.opacity(0.84))
                 .monospacedDigit()
@@ -137,14 +125,12 @@ struct BreakView: View {
                         .padding(.horizontal, 11)
                         .frame(height: 34)
                         .background {
-                            ZStack {
+                            if isCurrent {
                                 Capsule()
-                                    .fill(pillSurface.opacity(isHovered ? (isLight ? 0.06 : 0.10) : 0.001))
-                                if isCurrent {
-                                    Capsule()
-                                        .fill(pillSurface.opacity(isLight ? 0.11 : 0.22))
-                                        .matchedGeometryEffect(id: "activeBreakThemePill", in: themePillNamespace)
-                                }
+                                    .fill(pillSurface.opacity(isLight ? 0.11 : 0.22))
+                                    .matchedGeometryEffect(id: "activeBreakThemePill", in: themePillNamespace)
+                            } else if isHovered {
+                                Capsule().fill(pillSurface.opacity(isLight ? 0.06 : 0.10))
                             }
                         }
                         .contentShape(Rectangle())
@@ -153,11 +139,7 @@ struct BreakView: View {
                     .focusable(false)
                     .onHover { hovering in
                         withAnimation(.easeOut(duration: 0.14)) {
-                            if hovering {
-                                hoveredTheme = theme
-                            } else if hoveredTheme == theme {
-                                hoveredTheme = nil
-                            }
+                            hoveredTheme = hovering ? theme : (hoveredTheme == theme ? nil : hoveredTheme)
                         }
                     }
                 }
@@ -270,38 +252,18 @@ struct BreakView: View {
                         .transition(.opacity)
 
                     HStack(spacing: 10) {
-                        Button(action: jumpToNextCategory) {
-                            HStack(spacing: 5) {
-                                Image(systemName: exercise.category.symbolName)
-                                    .font(.system(size: 12, weight: .semibold))
-                                Text(exercise.badgeText)
-                                    .font(.system(size: 13, weight: .medium))
-                            }
-                            .foregroundColor(fgBase.opacity(0.86))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 5)
-                            .background(Capsule().fill(pillSurface.opacity(isLight ? 0.07 : 0.14)))
-                        }
-                        .buttonStyle(.plain)
-                        .focusable(false)
-                        .help("点击切换部位（颈部 ➔ 肩背 ➔ 手腕 ➔ 腰脊 ➔ 臀腿）")
-
-                        Button(action: nextExercise) {
-                            HStack(spacing: 5) {
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                                    .font(.system(size: 12, weight: .semibold))
-                                Text("换一招 (\(currentCatalogPosition)/\(StretchRoutinePlanner.catalog.count))")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .monospacedDigit()
-                            }
-                            .foregroundColor(fgBase.opacity(0.88))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 5)
-                            .background(Capsule().fill(pillSurface.opacity(isLight ? 0.08 : 0.16)))
-                        }
-                        .buttonStyle(.plain)
-                        .focusable(false)
-                        .help("切换下一招 (→ 或空格)")
+                        heroActionButton(
+                            icon: exercise.category.symbolName,
+                            text: exercise.badgeText,
+                            help: "点击切换部位（颈部 ➔ 肩背 ➔ 手腕 ➔ 腰脊 ➔ 臀腿）",
+                            action: jumpToNextCategory
+                        )
+                        heroActionButton(
+                            icon: "arrow.triangle.2.circlepath",
+                            text: "换一招 (\(currentCatalogPosition)/\(StretchRoutinePlanner.catalog.count))",
+                            help: "切换下一招 (→ 或空格)",
+                            action: nextExercise
+                        )
                     }
 
                     VStack(spacing: 7) {
@@ -421,33 +383,18 @@ struct BreakView: View {
         Self.recentExerciseIds = Set(planned.map(\.id))
     }
 
-    private func previousExercise() {
-        let all = StretchRoutinePlanner.catalog
-        guard !all.isEmpty else { return }
-        withAnimation(.timingCurve(0.22, 1.0, 0.36, 1.0, duration: 0.22)) {
-            if !hasManualSwitch,
-               let current = currentExercise,
-               let idx = all.firstIndex(where: { $0.id == current.id }) {
-                catalogIndex = (idx - 1 + all.count) % all.count
-                hasManualSwitch = true
-            } else {
-                catalogIndex = (catalogIndex - 1 + all.count) % all.count
-            }
-        }
-    }
+    private func previousExercise() { stepCatalog(by: -1) }
+    private func nextExercise() { stepCatalog(by: 1) }
 
-    private func nextExercise() {
+    private func stepCatalog(by delta: Int) {
         let all = StretchRoutinePlanner.catalog
         guard !all.isEmpty else { return }
         withAnimation(.timingCurve(0.22, 1.0, 0.36, 1.0, duration: 0.22)) {
-            if !hasManualSwitch,
-               let current = currentExercise,
-               let idx = all.firstIndex(where: { $0.id == current.id }) {
-                catalogIndex = (idx + 1) % all.count
-                hasManualSwitch = true
-            } else {
-                catalogIndex = (catalogIndex + 1) % all.count
-            }
+            let base = (!hasManualSwitch && currentExercise != nil)
+                ? (all.firstIndex(where: { $0.id == currentExercise!.id }) ?? catalogIndex)
+                : catalogIndex
+            catalogIndex = (base + delta + all.count) % all.count
+            hasManualSwitch = true
         }
     }
 
@@ -521,5 +468,23 @@ struct BreakView: View {
         let total = Int(remainingSeconds)
         guard total > 0 else { return "00:00" }
         return String(format: "%02d:%02d", total / 60, total % 60)
+    }
+
+    private func heroActionButton(icon: String, text: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(text)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .foregroundColor(fgBase.opacity(0.88))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(pillSurface.opacity(isLight ? 0.08 : 0.15)))
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .help(help)
     }
 }
