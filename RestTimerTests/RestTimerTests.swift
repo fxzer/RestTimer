@@ -428,6 +428,37 @@ final class RestTimerTests: XCTestCase {
         XCTAssertEqual(nextDay.menuSummary, "今日尚未休息")
     }
 
+    func testDailyBreakStatsHistoryBucketsAndSkipTracking() {
+        let suiteName = "RestTimerTests.HistoryBuckets.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let store = DailyBreakStatsStore(
+            userDefaults: defaults,
+            storageKey: "legacyStats",
+            historyKey: "historyEvents"
+        )
+        let now = Date()
+        store.recordCompletedBreak(seconds: 120, focusSeconds: 1800, now: now.addingTimeInterval(-3600))
+        store.recordSkippedBreak(focusSeconds: 2400, now: now.addingTimeInterval(-1200))
+        store.recordCompletedBreak(seconds: 120, focusSeconds: 1500, now: now)
+
+        let events = store.eventsForDay(now: now)
+        XCTAssertEqual(events.count, 3)
+
+        let week = store.dailyBuckets(days: 7, now: now)
+        XCTAssertEqual(week.count, 7)
+        let todayBucket = week.last!
+        XCTAssertEqual(todayBucket.completedCount, 2)
+        XCTAssertEqual(todayBucket.skippedCount, 1)
+        XCTAssertEqual(todayBucket.totalBreakSeconds, 240)
+        XCTAssertEqual(todayBucket.longestSitSeconds, 2400)
+
+        let heat = store.dailyBuckets(days: 112, now: now)
+        XCTAssertEqual(heat.count, 112)
+        XCTAssertEqual(heat.last?.completedCount, 2)
+    }
+
     func testMeetingAndFullscreenDNDDefersBreakUntilEnded() {
         final class MockContext: SmartContextProviding {
             var inMeeting = true

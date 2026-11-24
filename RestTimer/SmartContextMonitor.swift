@@ -229,7 +229,44 @@ struct SystemSmartContextProvider: SmartContextProviding {
     }
 }
 
-/// 今日休息极简轻统计模型（按自然日自动归零）
+/// 单次休息/跳过事件记录（纯本地轻量持久化，自动滚动保留近 140 天）
+struct BreakEventRecord: Codable, Equatable, Identifiable {
+    let id: UUID
+    let timestamp: TimeInterval
+    let breakSeconds: Int
+    let focusSeconds: Int
+    let wasSkipped: Bool
+
+    init(
+        id: UUID = UUID(),
+        timestamp: TimeInterval,
+        breakSeconds: Int,
+        focusSeconds: Int,
+        wasSkipped: Bool
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.breakSeconds = breakSeconds
+        self.focusSeconds = focusSeconds
+        self.wasSkipped = wasSkipped
+    }
+}
+
+/// 单日汇总桶（供近 7 日柱图与近 16 周热力图复用）
+struct DailyStatsBucket: Equatable, Identifiable {
+    let dayKey: String
+    let date: Date
+    let weekdayShort: String
+    let completedCount: Int
+    let skippedCount: Int
+    let totalBreakSeconds: Int
+    let totalFocusSeconds: Int
+    let longestSitSeconds: Int
+
+    var id: String { dayKey }
+}
+
+/// 今日休息极简轻统计模型（菜单栏与统计页共用）
 struct DailyBreakStats: Codable, Equatable {
     var dayKey: String
     var completedCount: Int
@@ -244,18 +281,45 @@ struct DailyBreakStats: Codable, Equatable {
     }
 }
 
-/// 今日休息统计持久化存储器
+/// 休息历史与统计存储器（兼容旧日统计，提供今日节律、近 7 日趋势与近 16 周热力聚合）
 final class DailyBreakStatsStore {
     private let userDefaults: UserDefaults
     private let storageKey: String
+    private let historyKey: String
+    private let retentionDays: Int = 140
 
-    init(userDefaults: UserDefaults = .standard, storageKey: String = "DailyBreakStats_v1") {
+    init(
+        userDefaults: UserDefaults = .standard,
+        storageKey: String = "DailyBreakStats_v1",
+        historyKey: String = "BreakEventHistory_v1"
+    ) {
         self.userDefaults = userDefaults
         self.storageKey = storageKey
+        self.historyKey = historyKey
+    }
+
+    func loadHistory(now: Date = Date()) -> [BreakEventRecord] {
+        guard let data = userDefaults.data(forKey: historyKey),
+              let decoded = try? JSONDecoder().decode([BreakEventRecord].self, from: data) else {
+            return []
+        }
+        let cutoff = now.timeIntervalSince1970 - TimeInterval(retentionDays * 86_400)
+        return decoded.filter { $0.timestamp >= cutoff }
     }
 
     func todayStats(now: Date = Date()) -> DailyBreakStats {
         let today = Self.dayKey(for: now)
+        let events = loadHistory(now: now).filter {
+            !$0.wasSkipped && Self.dayKey(for: Date(timeIntervalSince1970: $0.timestamp)) == today
+        }
+        if !events.isEmpty {
+            return DailyBreakStats(
+                dayKey: today,
+                completedCount: events.count,
+                totalBreakSeconds: events.reduce(0) { $0 + $1.breakSeconds }
+            )
+        }
+        // 兼容历史仅写入旧 summary 的情况
         if let data = userDefaults.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode(DailyBreakStats.self, from: data),
            decoded.dayKey == today {
@@ -265,14 +329,88 @@ final class DailyBreakStatsStore {
     }
 
     @discardableResult
-    func recordCompletedBreak(seconds: Int, now: Date = Date()) -> DailyBreakStats {
-        var current = todayStats(now: now)
-        current.completedCount += 1
-        current.totalBreakSeconds += max(1, seconds)
-        if let encoded = try? JSONEncoder().encode(current) {
+    func recordCompletedBreak(seconds: Int, focusSeconds: Int = 0, now: Date = Date()) -> DailyBreakStats {
+        let event = BreakEventRecord(
+            timestamp: now.timeIntervalSince1970,
+            breakSeconds: max(1, seconds),
+            focusSeconds: max(0, focusSeconds),
+            wasSkipped: false
+        )
+        appendEvent(event, now: now)
+        let updated = todayStats(now: now)
+        saveLegacySummary(updated)
+        return updated
+    }
+
+    func recordSkippedBreak(focusSeconds: Int = 0, now: Date = Date()) {
+        let event = BreakEventRecord(
+            timestamp: now.timeIntervalSince1970,
+            breakSeconds: 0,
+            focusSeconds: max(0, focusSeconds),
+            wasSkipped: true
+        )
+        appendEvent(event, now: now)
+    }
+
+    /// 聚合近 N 天的每日汇总桶（从早到晚，最后一项为今日）
+    func dailyBuckets(days: Int, now: Date = Date()) -> [DailyStatsBucket] {
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: now)
+        let history = loadHistory(now: now)
+
+        var grouped: [String: [BreakEventRecord]] = [:]
+        for record in history {
+            let key = Self.dayKey(for: Date(timeIntervalSince1970: record.timestamp))
+            grouped[key, default: []].append(record)
+        }
+
+        let weekdaySymbols = ["日", "一", "二", "三", "四", "五", "六"]
+        var result: [DailyStatsBucket] = []
+        for offset in stride(from: days - 1, through: 0, by: -1) {
+            guard let dayDate = calendar.date(byAdding: .day, value: -offset, to: todayStart) else { continue }
+            let key = Self.dayKey(for: dayDate)
+            let dayEvents = grouped[key] ?? []
+            let completed = dayEvents.filter { !$0.wasSkipped }
+            let skipped = dayEvents.filter { $0.wasSkipped }
+            let weekdayIdx = max(0, min(6, calendar.component(.weekday, from: dayDate) - 1))
+            let label = offset == 0 ? "今" : weekdaySymbols[weekdayIdx]
+
+            result.append(
+                DailyStatsBucket(
+                    dayKey: key,
+                    date: dayDate,
+                    weekdayShort: label,
+                    completedCount: completed.count,
+                    skippedCount: skipped.count,
+                    totalBreakSeconds: completed.reduce(0) { $0 + $1.breakSeconds },
+                    totalFocusSeconds: dayEvents.reduce(0) { $0 + $1.focusSeconds },
+                    longestSitSeconds: dayEvents.map(\.focusSeconds).max() ?? 0
+                )
+            )
+        }
+        return result
+    }
+
+    /// 获取指定日期当天的全部事件（按时间升序，供今日呼吸节律轴绘制）
+    func eventsForDay(now: Date = Date()) -> [BreakEventRecord] {
+        let today = Self.dayKey(for: now)
+        return loadHistory(now: now)
+            .filter { Self.dayKey(for: Date(timeIntervalSince1970: $0.timestamp)) == today }
+            .sorted { $0.timestamp < $1.timestamp }
+    }
+
+    private func appendEvent(_ event: BreakEventRecord, now: Date) {
+        var list = loadHistory(now: now)
+        list.append(event)
+        if let encoded = try? JSONEncoder().encode(list) {
+            userDefaults.set(encoded, forKey: historyKey)
+        }
+    }
+
+    private func saveLegacySummary(_ summary: DailyBreakStats) {
+        if let encoded = try? JSONEncoder().encode(summary) {
             userDefaults.set(encoded, forKey: storageKey)
         }
-        return current
     }
 
     static func dayKey(for date: Date) -> String {

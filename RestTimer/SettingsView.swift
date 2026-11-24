@@ -5,6 +5,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
     case clockAndRhythm = "时间"
     case smartDelay = "防打断"
     case appearanceAndGeneral = "通用"
+    case statistics = "统计"
 
     var id: String { rawValue }
 
@@ -16,6 +17,8 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
             return "hand.raised"
         case .appearanceAndGeneral:
             return "gearshape"
+        case .statistics:
+            return "chart.bar"
         }
     }
 }
@@ -70,6 +73,9 @@ struct SettingsView: View {
                         .transition(.opacity)
                 case .appearanceAndGeneral:
                     appearanceAndGeneralTab
+                        .transition(.opacity)
+                case .statistics:
+                    BreakStatsView()
                         .transition(.opacity)
                 }
             }

@@ -19,6 +19,7 @@ internal final class TimerManager: ObservableObject {
     @Published private(set) var isBreakPreview: Bool = false
     @Published private(set) var isDeferredByDND: Bool = false
     @Published private(set) var todayStats: DailyBreakStats
+    @Published private(set) var statsVersion: Int = 0
     @Published var settings: TimerSettings {
         didSet {
             handleSettingsDidChange(from: oldValue)
@@ -43,6 +44,7 @@ internal final class TimerManager: ObservableObject {
     private var previewRestoreTarget: PreviewRestoreTarget?
     private var didAutoPauseMediaForCurrentBreak = false
     private var pendingHeadphoneMediaResumeDeadline: TimeInterval?
+    private var lastWorkSegmentFocusSeconds: Int = 0
     private var isAdjustingSettings = false
 
     // MARK: - 派生属性（全部源自单一状态机与配置，杜绝镜像失步）
@@ -56,6 +58,36 @@ internal final class TimerManager: ObservableObject {
     var workDuration: TimeInterval { TimeInterval(settings.workTotalSeconds) }
     var breakDuration: TimeInterval { TimeInterval(settings.breakTotalSeconds) }
     var earlyNotifyDuration: TimeInterval { TimeInterval(settings.earlyNotifyTotalSeconds) }
+
+    /// 当前进行中专注片段的已持续秒数（供统计页实时展示「最长连坐」与「累计专注」）
+    var currentActiveFocusElapsedSeconds: Int {
+        let now = Date().timeIntervalSince1970
+        switch state {
+        case .working(let startedAt):
+            return max(0, Int(now - startedAt))
+        case .pendingBreak(let startedAt, _):
+            return max(Int(workDuration), Int(workDuration + max(0, now - startedAt)))
+        case .paused(.working(let remaining), _):
+            return max(0, Int(workDuration - remaining))
+        case .paused(.pendingBreak(let overdue), _):
+            return max(Int(workDuration), Int(workDuration + max(0, overdue)))
+        default:
+            return 0
+        }
+    }
+
+    /// 供设置页「统计」Tab 读取今日节律、近 7 日柱图与近 16 周热力数据
+    func makeStatsSnapshot(now: Date = Date()) -> (
+        todayEvents: [BreakEventRecord],
+        weeklyBuckets: [DailyStatsBucket],
+        heatmapBuckets: [DailyStatsBucket]
+    ) {
+        (
+            dailyStatsStore.eventsForDay(now: now),
+            dailyStatsStore.dailyBuckets(days: 7, now: now),
+            dailyStatsStore.dailyBuckets(days: 112, now: now)
+        )
+    }
 
     var smartDelayConfig: SmartDelayConfig {
         SmartDelayConfig(
@@ -121,6 +153,11 @@ internal final class TimerManager: ObservableObject {
             if self.isBreakPreview {
                 self.endBreakPreview()
                 return
+            }
+            if self.state.isBreaking {
+                self.dailyStatsStore.recordSkippedBreak(focusSeconds: self.lastWorkSegmentFocusSeconds)
+                self.lastWorkSegmentFocusSeconds = 0
+                self.statsVersion += 1
             }
             self.handleHeadphoneMediaResumeAfterBreak(userIsPresent: true)
             self.transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: true)
@@ -366,6 +403,9 @@ internal final class TimerManager: ObservableObject {
     private func transition(to newState: SessionState, notifyWorkStart: Bool = false) {
         assert(Thread.isMainThread, "SessionState transitions must happen on main thread")
         let wasBreaking = state.isBreaking
+        if !wasBreaking, case .breaking = newState, !isBreakPreview {
+            lastWorkSegmentFocusSeconds = currentActiveFocusElapsedSeconds
+        }
         invalidateAllTimers()
         state = newState
 
@@ -481,7 +521,13 @@ internal final class TimerManager: ObservableObject {
         if isBreakPreview {
             endBreakPreview()
         } else {
-            todayStats = dailyStatsStore.recordCompletedBreak(seconds: Int(breakDuration))
+            let focusSeconds = max(lastWorkSegmentFocusSeconds, Int(workDuration))
+            lastWorkSegmentFocusSeconds = 0
+            todayStats = dailyStatsStore.recordCompletedBreak(
+                seconds: Int(breakDuration),
+                focusSeconds: focusSeconds
+            )
+            statsVersion += 1
             // 休息自然结束时播放一声轻柔系统提示音，方便闭眼拉伸或离座时知晓
             if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
                 NSSound(named: NSSound.Name("Glass"))?.play()
