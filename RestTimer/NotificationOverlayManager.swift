@@ -6,7 +6,112 @@ enum ToastNotificationKind: Equatable {
     case earlyWarning(minutes: Int, seconds: Int)
 }
 
-/// 居中 Toast 通知弹窗显式状态机（可真正取消挂起的淡出任务，避免重复 close 竞态）
+private final class CapsuleVisualEffectView: NSVisualEffectView {
+    override func layout() {
+        super.layout()
+        wantsLayer = true
+        layer?.cornerRadius = bounds.height / 2
+        layer?.masksToBounds = true
+    }
+}
+
+/// 真实跨窗口毛玻璃材质（AppKit NSVisualEffectView behindWindow，在任意浅色/深色/彩色窗口上均通透清晰）
+struct BehindWindowFrostedGlass: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = CapsuleVisualEffectView()
+        view.blendingMode = .behindWindow
+        view.material = .popover
+        view.state = .active
+        view.isEmphasized = true
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.blendingMode = .behindWindow
+        nsView.material = .popover
+        nsView.state = .active
+    }
+}
+
+/// 统一轻柔阴影毛玻璃胶囊背景（自动适配系统亮暗主题：轻微弥散浮起感，无重黑影）
+struct FrostedGlassCapsuleBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let isDark = colorScheme == .dark
+        ZStack {
+            BehindWindowFrostedGlass()
+            Capsule()
+                .fill(isDark ? Color(nsColor: .windowBackgroundColor).opacity(0.26) : Color.white.opacity(0.36))
+        }
+        .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .inset(by: 0.5)
+                .stroke(Color.white.opacity(isDark ? 0.22 : 0.70), lineWidth: 0.5)
+        )
+        .overlay(
+            Capsule()
+                .stroke(Color.black.opacity(isDark ? 0.40 : 0.12), lineWidth: 0.5)
+        )
+        .shadow(
+            color: Color.black.opacity(isDark ? 0.28 : 0.12),
+            radius: isDark ? 9 : 8,
+            x: 0,
+            y: 3
+        )
+    }
+}
+
+private struct ToastCapsuleBannerView: View {
+    let kind: ToastNotificationKind
+
+    private var iconName: String {
+        switch kind {
+        case .workStarted:
+            return "clock.fill"
+        case .earlyWarning:
+            return "bell.fill"
+        }
+    }
+
+    private var titleText: String {
+        switch kind {
+        case .workStarted:
+            return "开始专注"
+        case .earlyWarning(let minutes, let seconds):
+            if minutes > 0 && seconds > 0 {
+                return "\(minutes)分\(seconds)秒后休息"
+            } else if minutes > 0 {
+                return "\(minutes)分后休息"
+            } else {
+                return "\(seconds)秒后休息"
+            }
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: iconName)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(Color.accentColor)
+
+            Text(titleText)
+                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .foregroundColor(Color(nsColor: .labelColor))
+                .monospacedDigit()
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 12)
+        .background(FrostedGlassCapsuleBackground())
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 16)
+        .fixedSize()
+    }
+}
+
+/// 顶部磨砂玻璃胶囊轻提示状态机（跟随系统主题色，无杂色边框）
 final class NotificationOverlayManager {
     private enum OverlayState {
         case hidden
@@ -33,7 +138,7 @@ final class NotificationOverlayManager {
             self?.beginFadeOut()
         }
         state = .visible(windows: windows, fadeWorkItem: fadeWorkItem)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: fadeWorkItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4, execute: fadeWorkItem)
     }
 
     func dismissImmediately() {
@@ -70,54 +175,19 @@ final class NotificationOverlayManager {
 
         for window in windows {
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.3
+                context.duration = 0.25
                 window.animator().alphaValue = 0
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: cleanupWorkItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: cleanupWorkItem)
     }
 
     private func makeWindow(for kind: ToastNotificationKind, on screen: NSScreen) -> NSPanel {
-        let contentSize: CGSize
-        let rootView: AnyView
-
-        switch kind {
-        case .workStarted:
-            contentSize = CGSize(width: 200, height: 200)
-            rootView = AnyView(
-                VStack {
-                    Text("开始专注")
-                        .font(.system(size: 40, weight: .bold))
-                        .foregroundColor(.white)
-                }
-                .frame(width: contentSize.width, height: contentSize.height)
-                .background(Color.black.opacity(0.4))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            )
-
-        case .earlyWarning(let minutes, let seconds):
-            contentSize = CGSize(width: 250, height: 150)
-            rootView = AnyView(
-                VStack {
-                    Text("\(minutes)分\(seconds)秒后")
-                        .font(.system(size: 30, weight: .bold))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .padding(.bottom, 10)
-                    Text("将进入休息")
-                        .font(.system(size: 30, weight: .bold))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(width: contentSize.width, height: contentSize.height)
-                .background(Color.black.opacity(0.4))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            )
-        }
-
-        let hostingController = NSHostingController(rootView: rootView)
+        let hostingController = NSHostingController(rootView: ToastCapsuleBannerView(kind: kind))
         hostingController.view.wantsLayer = true
+        let fitting = hostingController.view.fittingSize
+        let contentSize = NSSize(width: max(136, ceil(fitting.width)), height: max(44, ceil(fitting.height)))
 
         let window = NSPanel(
             contentRect: NSRect(origin: .zero, size: contentSize),
@@ -127,25 +197,17 @@ final class NotificationOverlayManager {
         )
         window.contentViewController = hostingController
         window.isOpaque = false
-        window.hasShadow = true
+        window.hasShadow = false
         window.level = .statusBar
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.backgroundColor = .clear
         window.ignoresMouseEvents = true
         window.alphaValue = 1
-        window.contentView?.appearance = NSAppearance(named: .vibrantDark)
-        window.contentView?.wantsLayer = true
-        window.contentView?.layer?.cornerRadius = 12
-        window.contentView?.layer?.masksToBounds = true
 
-        let screenFrame = screen.frame
-        window.contentViewController?.view.layout()
-        window.contentViewController?.view.layoutSubtreeIfNeeded()
-
-        let windowSize = window.frame.size
-        let originX = screenFrame.midX - windowSize.width / 2
-        let originY = screenFrame.midY - windowSize.height / 2
-        window.setFrameOrigin(NSPoint(x: originX, y: originY))
+        let visibleFrame = screen.visibleFrame
+        let originX = visibleFrame.midX - contentSize.width / 2
+        let originY = visibleFrame.maxY - contentSize.height - 10
+        window.setFrame(NSRect(origin: NSPoint(x: originX, y: originY), size: contentSize), display: true)
 
         return window
     }

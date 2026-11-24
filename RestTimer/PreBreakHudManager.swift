@@ -11,34 +11,22 @@ private struct PreBreakHudView: View {
     @ObservedObject var viewModel: PreBreakHudViewModel
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 9) {
             Image(systemName: viewModel.isWarningCap ? "exclamationmark.circle.fill" : "cup.and.saucer.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(viewModel.isWarningCap ? .orange : .cyan)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(viewModel.isWarningCap ? .orange : Color.accentColor)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(viewModel.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white)
-                    .monospacedDigit()
-                Text(viewModel.subtitle)
-                    .font(.system(size: 11, weight: .regular))
-                    .foregroundColor(.white.opacity(0.8))
-            }
+            Text(viewModel.title)
+                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .foregroundColor(Color(nsColor: .labelColor))
+                .monospacedDigit()
         }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 12)
+        .background(FrostedGlassCapsuleBackground())
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(
-            Capsule()
-                .fill(Color.black.opacity(0.78))
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            (viewModel.isWarningCap ? Color.orange : Color.white).opacity(0.25),
-                            lineWidth: 1
-                        )
-                )
-        )
+        .padding(.top, 10)
+        .padding(.bottom, 16)
         .fixedSize()
     }
 }
@@ -121,12 +109,12 @@ final class PreBreakHudManager {
         switch reason {
         case .idleTrigger:
             viewModel.isWarningCap = false
-            viewModel.title = "\(secondsLeft) 秒后进入休息"
-            viewModel.subtitle = "继续操作键盘或鼠标可推迟"
+            viewModel.title = "\(secondsLeft)秒后休息"
+            viewModel.subtitle = ""
         case .maxDelayCap:
             viewModel.isWarningCap = true
-            viewModel.title = "\(secondsLeft) 秒后强制休息"
-            viewModel.subtitle = "已达到最长顺延上限，请保存进度"
+            viewModel.title = "\(secondsLeft)秒后休息"
+            viewModel.subtitle = ""
         }
     }
 
@@ -137,7 +125,7 @@ final class PreBreakHudManager {
             let hostingController = NSHostingController(rootView: PreBreakHudView(viewModel: viewModel))
             hostingController.view.wantsLayer = true
             let fittingSize = hostingController.view.fittingSize
-            let size = NSSize(width: max(240, fittingSize.width), height: max(48, fittingSize.height))
+            let size = NSSize(width: max(150, ceil(fittingSize.width)), height: max(44, ceil(fittingSize.height)))
 
             let panel = NSPanel(
                 contentRect: NSRect(origin: .zero, size: size),
@@ -148,7 +136,7 @@ final class PreBreakHudManager {
             panel.contentViewController = hostingController
             panel.isOpaque = false
             panel.backgroundColor = .clear
-            panel.hasShadow = true
+            panel.hasShadow = false
             panel.level = .statusBar
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.ignoresMouseEvents = true
@@ -168,7 +156,7 @@ final class PreBreakHudManager {
             if let contentView = panel.contentViewController?.view {
                 contentView.layoutSubtreeIfNeeded()
                 let fittingSize = contentView.fittingSize
-                let size = NSSize(width: max(240, fittingSize.width), height: max(48, fittingSize.height))
+                let size = NSSize(width: max(150, ceil(fittingSize.width)), height: max(44, ceil(fittingSize.height)))
                 position(panel: panel, on: screen, size: size)
             }
         }
@@ -177,7 +165,7 @@ final class PreBreakHudManager {
     private func position(panel: NSPanel, on screen: NSScreen, size: NSSize) {
         let visibleFrame = screen.visibleFrame
         let originX = visibleFrame.midX - size.width / 2
-        let originY = visibleFrame.maxY - size.height - 20
+        let originY = visibleFrame.maxY - size.height - 10
         panel.setFrame(NSRect(origin: NSPoint(x: originX, y: originY), size: size), display: true)
     }
 }

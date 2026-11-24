@@ -46,11 +46,7 @@ final class StatusBarManager: NSObject, ObservableObject {
             self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
             if let button = self.statusItem?.button {
-                if let customImage = NSImage(named: "YourIconName") {
-                    customImage.size = NSSize(width: 14, height: 14)
-                    customImage.isTemplate = true
-                    button.image = customImage
-                }
+                button.image = self.makeProgressRingImage(progress: 1.0, isPaused: false, isBreaking: false)
                 button.imagePosition = .imageLeft
                 button.imageHugsTitle = true
             }
@@ -64,25 +60,16 @@ final class StatusBarManager: NSObject, ObservableObject {
     private func setupMenu() {
         let menu = NSMenu()
 
+        // 1. 计时器控制组（高频动作归拢，组内不加分割线）
         let breakNowItem = NSMenuItem(
-            title: "立即休息",
+            title: "休息",
             action: #selector(startBreakNow(_:)),
             keyEquivalent: "b"
         )
         breakNowItem.target = self
         menu.addItem(breakNowItem)
         self.breakNowMenuItem = breakNowItem
-        menu.addItem(NSMenuItem.separator())
 
-        let settingsItem = NSMenuItem(
-            title: "设置",
-            action: #selector(showSettings),
-            keyEquivalent: ","
-        )
-        settingsItem.target = self
-        menu.addItem(settingsItem)
-
-        menu.addItem(NSMenuItem.separator())
         let pauseItem = NSMenuItem(
             title: "暂停",
             action: #selector(togglePause(_:)),
@@ -92,7 +79,6 @@ final class StatusBarManager: NSObject, ObservableObject {
         menu.addItem(pauseItem)
         self.pauseMenuItem = pauseItem
 
-        menu.addItem(NSMenuItem.separator())
         let resetItem = NSMenuItem(
             title: "重置",
             action: #selector(resetTimer(_:)),
@@ -102,6 +88,16 @@ final class StatusBarManager: NSObject, ObservableObject {
         menu.addItem(resetItem)
 
         menu.addItem(NSMenuItem.separator())
+
+        // 2. 应用设置与信息组
+        let settingsItem = NSMenuItem(
+            title: "设置",
+            action: #selector(showSettings),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
         let aboutItem = NSMenuItem(
             title: "关于",
             action: #selector(showAbout),
@@ -111,6 +107,8 @@ final class StatusBarManager: NSObject, ObservableObject {
         menu.addItem(aboutItem)
 
         menu.addItem(NSMenuItem.separator())
+
+        // 3. 退出
         let quitItem = NSMenuItem(
             title: "退出",
             action: #selector(handleQuit),
@@ -137,14 +135,10 @@ final class StatusBarManager: NSObject, ObservableObject {
 
         if let breakNowItem = breakNowMenuItem {
             switch state {
-            case .pendingBreak:
-                breakNowItem.title = "立即休息（待空闲中）"
-                breakNowItem.isHidden = false
-                breakNowItem.isEnabled = true
             case .breaking:
                 breakNowItem.isHidden = true
-            case .idle, .working, .paused, .away:
-                breakNowItem.title = "立即休息"
+            case .idle, .working, .pendingBreak, .paused, .away:
+                breakNowItem.title = "休息"
                 breakNowItem.isHidden = false
                 breakNowItem.isEnabled = true
             }
@@ -161,22 +155,24 @@ final class StatusBarManager: NSObject, ObservableObject {
 
         switch state {
         case .idle:
-            setIcon(named: "YourIconName", on: button)
+            button.image = makeProgressRingImage(progress: 1.0, isPaused: false, isBreaking: false)
             button.attributedTitle = NSAttributedString(string: "--:--", attributes: normalAttributes)
 
         case .paused:
-            setIcon(named: "YourPauseIconName", on: button)
             if let pausedTime = state.pausedRemainingTime, pausedTime > 0 {
+                let total = max(1.0, timerManager.workDuration)
+                button.image = makeProgressRingImage(progress: min(1.0, pausedTime / total), isPaused: true, isBreaking: false)
                 button.attributedTitle = NSAttributedString(
                     string: formatTime(Int(pausedTime)),
                     attributes: normalAttributes
                 )
             } else {
+                button.image = makeProgressRingImage(progress: 0.0, isPaused: true, isBreaking: false)
                 button.attributedTitle = NSAttributedString(string: "暂停", attributes: normalAttributes)
             }
 
         case .pendingBreak(_, let overdue):
-            setIcon(named: "YourIconName", on: button)
+            button.image = makeProgressRingImage(progress: 0.08, isPaused: false, isBreaking: false)
             let pendingAttributes: [NSAttributedString.Key: Any] = [
                 .font: timeFont,
                 .foregroundColor: NSColor.systemOrange
@@ -187,19 +183,22 @@ final class StatusBarManager: NSObject, ObservableObject {
             )
 
         case .away:
-            setIcon(named: "YourPauseIconName", on: button)
+            button.image = makeProgressRingImage(progress: 0.0, isPaused: true, isBreaking: false)
             button.attributedTitle = NSAttributedString(string: "离开", attributes: normalAttributes)
 
         case .breaking(let remaining):
-            setIcon(named: "YourIconName", on: button)
+            let total = max(1.0, timerManager.breakDuration)
+            button.image = makeProgressRingImage(progress: min(1.0, max(0.0, remaining / total)), isPaused: false, isBreaking: true)
             button.attributedTitle = NSAttributedString(
                 string: formatTime(max(0, Int(remaining))),
                 attributes: normalAttributes
             )
 
         case .working(let startedAt):
-            setIcon(named: "YourIconName", on: button)
-            let remaining = Int(timerManager.workDuration - (Date().timeIntervalSince1970 - startedAt))
+            let total = max(1.0, timerManager.workDuration)
+            let remainingDouble = max(0.0, total - (Date().timeIntervalSince1970 - startedAt))
+            button.image = makeProgressRingImage(progress: min(1.0, remainingDouble / total), isPaused: false, isBreaking: false)
+            let remaining = Int(remainingDouble)
             let title = remaining > 0 ? formatTime(remaining) : "00:00"
             button.attributedTitle = NSAttributedString(string: title, attributes: normalAttributes)
         }
@@ -208,12 +207,52 @@ final class StatusBarManager: NSObject, ObservableObject {
         button.imageScaling = .scaleProportionallyDown
     }
 
-    private func setIcon(named name: String, on button: NSStatusBarButton) {
-        if let image = NSImage(named: name) {
-            image.size = NSSize(width: 14, height: 14)
-            image.isTemplate = true
-            button.image = image
+    /// 动态绘制 macOS 原生模板风格倒计时圆环图标（支持深浅色菜单栏自动反色）
+    private func makeProgressRingImage(progress: Double, isPaused: Bool, isBreaking: Bool) -> NSImage {
+        let size = NSSize(width: 15, height: 15)
+        let image = NSImage(size: size, flipped: false) { rect in
+            let center = NSPoint(x: rect.midX, y: rect.midY)
+            let radius: CGFloat = 5.6
+            let lineWidth: CGFloat = 2.0
+
+            // 底层浅色轨道圆环
+            let track = NSBezierPath()
+            track.appendArc(withCenter: center, radius: radius, startAngle: 0, endAngle: 360)
+            track.lineWidth = lineWidth
+            NSColor.black.withAlphaComponent(0.26).setStroke()
+            track.stroke()
+
+            // 前景剩余进度圆弧（从 12 点钟顺时针衰减）
+            let clamped = min(1.0, max(0.0, progress))
+            if clamped > 0.01 {
+                let arc = NSBezierPath()
+                arc.appendArc(
+                    withCenter: center,
+                    radius: radius,
+                    startAngle: 90,
+                    endAngle: 90 - CGFloat(clamped * 360.0),
+                    clockwise: true
+                )
+                arc.lineWidth = lineWidth
+                arc.lineCapStyle = .round
+                NSColor.black.setStroke()
+                arc.stroke()
+            }
+
+            // 中心状态微标识：暂停显示双竖线，休息显示圆点
+            if isPaused {
+                NSColor.black.setFill()
+                NSRect(x: center.x - 2.0, y: center.y - 2.3, width: 1.4, height: 4.6).fill()
+                NSRect(x: center.x + 0.6, y: center.y - 2.3, width: 1.4, height: 4.6).fill()
+            } else if isBreaking {
+                let dot = NSBezierPath(ovalIn: NSRect(x: center.x - 2.0, y: center.y - 2.0, width: 4.0, height: 4.0))
+                NSColor.black.setFill()
+                dot.fill()
+            }
+            return true
         }
+        image.isTemplate = true
+        return image
     }
 
     private func formatTime(_ totalSeconds: Int) -> String {
@@ -295,6 +334,7 @@ final class WindowManager: ObservableObject {
     func showSettings(timerManager: TimerManager) {
         switch windowState {
         case .visible(let window), .hidden(let window):
+            window.setContentSize(NSSize(width: SettingsTokens.windowWidth, height: SettingsTokens.windowHeight))
             window.makeKeyAndOrderFront(nil)
             centerWindowOnMainScreen(window)
             NSApplication.shared.activate(ignoringOtherApps: true)
@@ -305,11 +345,12 @@ final class WindowManager: ObservableObject {
                 rootView: SettingsView().environmentObject(timerManager)
             )
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 460, height: 640),
+                contentRect: NSRect(x: 0, y: 0, width: SettingsTokens.windowWidth, height: SettingsTokens.windowHeight),
                 styleMask: [.titled, .closable],
                 backing: .buffered,
                 defer: false
             )
+            window.setContentSize(NSSize(width: SettingsTokens.windowWidth, height: SettingsTokens.windowHeight))
             window.title = "设置"
             window.contentViewController = controller
             window.isReleasedWhenClosed = false
