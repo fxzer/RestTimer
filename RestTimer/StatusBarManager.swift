@@ -8,7 +8,6 @@ final class StatusBarManager: NSObject, ObservableObject {
     private var buttonUpdateTimer: Timer?
     private var cancellables: Set<AnyCancellable> = []
 
-    private weak var todayStatsMenuItem: NSMenuItem?
     private weak var breakNowMenuItem: NSMenuItem?
     private weak var pauseMenuItem: NSMenuItem?
 
@@ -48,12 +47,6 @@ final class StatusBarManager: NSObject, ObservableObject {
             }
             .store(in: &cancellables)
 
-        timerManager.$todayStats
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] stats in
-                self?.todayStatsMenuItem?.title = stats.menuSummary
-            }
-            .store(in: &cancellables)
 
         timerManager.$isDeferredByDND
             .receive(on: DispatchQueue.main)
@@ -83,19 +76,6 @@ final class StatusBarManager: NSObject, ObservableObject {
 
     private func setupMenu() {
         let menu = NSMenu()
-        menu.delegate = self
-
-        // 0. 今日休息极简轻统计（浅灰只读状态行，零弹窗负担）
-        let statsItem = NSMenuItem(
-            title: timerManager.todayStats.menuSummary,
-            action: nil,
-            keyEquivalent: ""
-        )
-        statsItem.isEnabled = false
-        menu.addItem(statsItem)
-        self.todayStatsMenuItem = statsItem
-
-        menu.addItem(NSMenuItem.separator())
 
         // 1. 计时器控制组（高频动作归拢，组内不加分割线）
         let breakNowItem = NSMenuItem(
@@ -480,9 +460,4 @@ final class WindowDelegate: NSObject, NSWindowDelegate {
     }
 }
 
-extension StatusBarManager: NSMenuDelegate {
-    func menuWillOpen(_ menu: NSMenu) {
-        timerManager.refreshTodayStats()
-        todayStatsMenuItem?.title = timerManager.todayStats.menuSummary
-    }
-}
+
