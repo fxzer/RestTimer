@@ -264,6 +264,40 @@ final class RestTimerTests: XCTestCase {
         } else {
             XCTFail("Expected breakDurationMustBePositive")
         }
+
+        // 超过 60 分钟的专注时长应被防久坐硬上限拦截
+        let overOneHour = manager.updateTimeSettings(
+            workMinutes: 61,
+            workSeconds: 0,
+            breakMinutes: 5,
+            breakSeconds: 0,
+            earlyMinutes: 2,
+            earlySeconds: 0
+        )
+        if case .failure(let error) = overOneHour {
+            XCTAssertEqual(error, .workDurationExceedsOneHour)
+        } else {
+            XCTFail("Expected workDurationExceedsOneHour")
+        }
+    }
+
+    func testStretchRoutinePlannerBalancesCategoriesAndDeduplicatesRecent() {
+        // 30 秒微休：只安排 1 个不需起身的桌前放松动作
+        let microRoutine = StretchRoutinePlanner.planRoutine(forBreakSeconds: 30)
+        XCTAssertEqual(microRoutine.count, 1)
+        XCTAssertFalse(microRoutine[0].requiresStanding)
+
+        // 5 分钟（300 秒）标准休息：编排 6-7 个跨部位动作且互不重复
+        let fullRoutine = StretchRoutinePlanner.planRoutine(forBreakSeconds: 300)
+        XCTAssertGreaterThanOrEqual(fullRoutine.count, 6)
+        XCTAssertEqual(Set(fullRoutine.map(\.id)).count, fullRoutine.count)
+
+        // 第二轮传入上一轮 ID 集合时，优先挑选未做过的新动作
+        let recentIds = Set(fullRoutine.map(\.id))
+        let nextRoutine = StretchRoutinePlanner.planRoutine(forBreakSeconds: 180, excludingRecentIds: recentIds)
+        XCTAssertFalse(nextRoutine.isEmpty)
+        let overlap = Set(nextRoutine.map(\.id)).intersection(recentIds)
+        XCTAssertTrue(overlap.isEmpty, "Expected fresh exercises when catalog has enough unused items")
     }
 
     func testLegacyTimerSettingsBackwardCompatibility() throws {
@@ -294,5 +328,49 @@ final class RestTimerTests: XCTestCase {
         XCTAssertEqual(decoded.maxDelayMinutes, 5)
         XCTAssertEqual(decoded.showPreBreakCountdown, true)
         XCTAssertEqual(decoded.autoResetOnIdle, true)
+        XCTAssertEqual(decoded.pauseMediaOnBreak, true)
+        XCTAssertEqual(decoded.enableBreakExerciseGuide, true)
+        XCTAssertEqual(decoded.breakGradientTheme, .autoDayNight)
+    }
+
+    func testBreakPreviewRestoresWorkTimerWithoutReset() {
+        let manager = TimerManager(activityMonitor: ActivityMonitor(sampler: MockActivitySampler()), autoStart: false)
+        manager.resetTimer()
+
+        guard case .working(let initialStartedAt) = manager.state else {
+            XCTFail("Expected .working state")
+            return
+        }
+
+        // 进入主题预览态：不阻止退出，且 isBreakPreview == true
+        manager.startBreakPreview()
+        XCTAssertTrue(manager.isBreakPreview)
+        XCTAssertTrue(manager.isBreakTime)
+        XCTAssertFalse(manager.preventQuit)
+
+        // 退出预览态：应恢复到专注态且保持剩余进度，不重头重置
+        manager.endBreakPreview()
+        XCTAssertFalse(manager.isBreakPreview)
+        XCTAssertFalse(manager.isBreakTime)
+        if case .working(let restoredStartedAt) = manager.state {
+            XCTAssertEqual(restoredStartedAt, initialStartedAt, accuracy: 0.5)
+        } else {
+            XCTFail("Expected .working after ending preview, got \(manager.state)")
+        }
+    }
+
+    func testCuratedQuoteLibraryProvidesSixtyUniqueQuotesWithNonRepeatingBag() {
+        XCTAssertEqual(CuratedQuoteLibrary.all.count, 60)
+        XCTAssertEqual(Set(CuratedQuoteLibrary.all.map(\.text)).count, 60)
+
+        var seen = Set<String>()
+        var last: CuratedQuote?
+        for _ in 0..<60 {
+            let next = CuratedQuoteLibrary.nextQuote(excluding: last)
+            XCTAssertNotEqual(next, last)
+            seen.insert(next.text)
+            last = next
+        }
+        XCTAssertEqual(seen.count, 60, "All 60 curated quotes should appear before repeating")
     }
 }
