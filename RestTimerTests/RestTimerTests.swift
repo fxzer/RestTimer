@@ -367,6 +367,24 @@ final class RestTimerTests: XCTestCase {
         }
     }
 
+    func testBreakPreviewToImmediateBreakSeamlesslyTransitionsToRealBreak() {
+        let manager = TimerManager(activityMonitor: ActivityMonitor(sampler: MockActivitySampler()), autoStart: false)
+        manager.resetTimer()
+        manager.startBreakPreview()
+        XCTAssertTrue(manager.isBreakPreview)
+        XCTAssertTrue(manager.isBreakTime)
+
+        // 从预览态直接点击立即休息，应平滑转换为正式休息，退出预览并重置为完整休息时长
+        manager.startBreakImmediately()
+        XCTAssertFalse(manager.isBreakPreview)
+        XCTAssertTrue(manager.isBreakTime)
+        if case .breaking(let remaining) = manager.state {
+            XCTAssertEqual(remaining, manager.breakDuration, accuracy: 1.0)
+        } else {
+            XCTFail("Expected .breaking state after startBreakImmediately")
+        }
+    }
+
     func testCuratedQuoteLibraryProvidesSixtyUniqueQuotesWithNonRepeatingBag() {
         XCTAssertEqual(CuratedQuoteLibrary.all.count, 60)
         XCTAssertEqual(Set(CuratedQuoteLibrary.all.map(\.text)).count, 60)

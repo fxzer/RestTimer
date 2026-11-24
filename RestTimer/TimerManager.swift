@@ -185,14 +185,16 @@ internal final class TimerManager: ObservableObject {
     /// 正式立即进入休息（如菜单栏点击「休息」）：触发媒体自动暂停，遵循「显示跳过按钮」设置
     func startBreakImmediately() {
         runOnMain {
-            if self.isBreakPreview {
+            let wasPreview = self.isBreakPreview
+            if wasPreview {
                 self.isBreakPreview = false
                 self.previewRestoreTarget = nil
+            } else {
+                guard !self.state.isBreaking else { return }
             }
-            guard !self.state.isBreaking else { return }
             self.startupWorkItem?.cancel()
             self.startupWorkItem = nil
-            self.transition(to: .breaking(remaining: self.breakDuration))
+            self.transition(to: .breaking(remaining: self.breakDuration), fromPreviewToReal: wasPreview)
         }
     }
 
@@ -399,9 +401,9 @@ internal final class TimerManager: ObservableObject {
 
     // MARK: - 状态机唯一转换入口
 
-    private func transition(to newState: SessionState, notifyWorkStart: Bool = false) {
+    private func transition(to newState: SessionState, notifyWorkStart: Bool = false, fromPreviewToReal: Bool = false) {
         assert(Thread.isMainThread, "SessionState transitions must happen on main thread")
-        let wasBreaking = state.isBreaking
+        let wasBreaking = state.isBreaking && !fromPreviewToReal
         if !wasBreaking, case .breaking = newState, !isBreakPreview {
             lastWorkSegmentFocusSeconds = currentActiveFocusElapsedSeconds
         }
