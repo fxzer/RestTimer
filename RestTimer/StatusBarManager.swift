@@ -438,14 +438,21 @@ final class WindowManager: ObservableObject {
         }
     }
 
+    private var isClosing = false
+
     func closeSettings() {
+        guard !isClosing else { return }
+        isClosing = true
+        defer { isClosing = false }
+
         switch windowState {
         case .visible(let window), .hidden(let window):
+            windowState = .notCreated
+            window.delegate = nil
             window.orderOut(nil)
             window.contentViewController = nil
             window.contentView = nil
             window.close()
-            windowState = .notCreated
         case .notCreated:
             break
         }
@@ -470,10 +477,6 @@ final class WindowDelegate: NSObject, NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         WindowManager.shared.closeSettings()
         return true
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        WindowManager.shared.closeSettings()
     }
 }
 

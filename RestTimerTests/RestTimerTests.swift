@@ -513,4 +513,21 @@ final class RestTimerTests: XCTestCase {
 
         loader.purge()
     }
+
+    func testSettingsWindowOpenAndCloseCycleDoesNotCrashOrRecurse() {
+        let manager = TimerManager.shared
+        WindowManager.shared.showSettings(timerManager: manager)
+        XCTAssertTrue(WindowManager.shared.isSettingsWindowVisible)
+
+        WindowManager.shared.closeSettings()
+        XCTAssertFalse(WindowManager.shared.isSettingsWindowVisible)
+
+        WindowManager.shared.closeSettings()
+        XCTAssertFalse(WindowManager.shared.isSettingsWindowVisible)
+
+        WindowManager.shared.showSettings(timerManager: manager)
+        XCTAssertTrue(WindowManager.shared.isSettingsWindowVisible)
+        WindowManager.shared.closeSettings()
+        XCTAssertFalse(WindowManager.shared.isSettingsWindowVisible)
+    }
 }
