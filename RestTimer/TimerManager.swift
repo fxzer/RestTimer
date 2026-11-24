@@ -31,6 +31,8 @@ internal final class TimerManager: ObservableObject {
     private var workTimer: Timer?
     private var earlyNotifyTimer: Timer?
     private var breakTimer: Timer?
+    private var breakDeadline: TimeInterval?
+    private var breakWatchdogWorkItem: DispatchWorkItem?
     private var activityCheckTimer: Timer?
     private var startupWorkItem: DispatchWorkItem?
     private var dockPolicyWorkItem: DispatchWorkItem?
@@ -110,6 +112,18 @@ internal final class TimerManager: ObservableObject {
                 return
             }
             self.transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: true)
+        }
+    }
+
+    /// 紧急逃生通道（连按 3 次 Esc / ⌘⇧Esc / 退出应用时触发）：无条件立刻撤销全部遮罩窗并退出休息
+    func emergencyExitBreak() {
+        runOnMain {
+            self.breakWindowManager.hide()
+            if self.isBreakPreview {
+                self.endBreakPreview()
+            } else if self.state.isBreaking {
+                self.transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: false)
+            }
         }
     }
 
@@ -371,20 +385,35 @@ internal final class TimerManager: ObservableObject {
             startActivityCheckTimer(interval: 0.5)
             evaluateActivityTick()
 
-        case .breaking:
+        case .breaking(let initialRemaining):
             preBreakHud.hide()
             toastOverlay.dismissImmediately()
             if !wasBreaking && !isBreakPreview && settings.pauseMediaOnBreak {
                 MediaPlaybackPauser.pauseActiveMediaIfNeeded()
             }
             breakWindowManager.show(timerManager: self)
-            breakTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+
+            let safeDuration = max(1.0, initialRemaining)
+            breakDeadline = Date().timeIntervalSince1970 + safeDuration
+
+            // 挂载至 RunLoop.Mode.common，防止菜单/拖拽等模态循环阻塞倒计时
+            let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] timer in
                 guard let self = self else {
                     timer.invalidate()
                     return
                 }
                 self.handleBreakTick()
             }
+            RunLoop.main.add(timer, forMode: .common)
+            breakTimer = timer
+
+            // 硬超时看门狗：即使 Timer 意外停摆，到期后 +2s 仍强制关闭休息窗，杜绝卡死
+            let watchdog = DispatchWorkItem { [weak self] in
+                guard let self = self, self.state.isBreaking else { return }
+                self.finishBreakNormally()
+            }
+            breakWatchdogWorkItem = watchdog
+            DispatchQueue.main.asyncAfter(deadline: .now() + safeDuration + 2.0, execute: watchdog)
 
         case .away:
             breakWindowManager.hide()
@@ -401,15 +430,29 @@ internal final class TimerManager: ObservableObject {
     // MARK: - 内部事件处理
 
     private func handleBreakTick() {
-        guard case .breaking(let remaining) = state else {
+        guard case .breaking = state else {
             breakTimer?.invalidate()
             breakTimer = nil
             return
         }
 
-        if remaining > 1 {
-            state = .breaking(remaining: remaining - 1)
-        } else if isBreakPreview {
+        let remaining: TimeInterval
+        if let deadline = breakDeadline {
+            remaining = max(0, deadline - Date().timeIntervalSince1970)
+        } else {
+            remaining = 0
+        }
+
+        if remaining > 0.25 {
+            state = .breaking(remaining: ceil(remaining))
+        } else {
+            finishBreakNormally()
+        }
+    }
+
+    private func finishBreakNormally() {
+        guard state.isBreaking else { return }
+        if isBreakPreview {
             endBreakPreview()
         } else {
             // 休息自然结束时播放一声轻柔系统提示音，方便闭眼拉伸或离座时知晓
@@ -605,6 +648,9 @@ internal final class TimerManager: ObservableObject {
         earlyNotifyTimer = nil
         breakTimer?.invalidate()
         breakTimer = nil
+        breakDeadline = nil
+        breakWatchdogWorkItem?.cancel()
+        breakWatchdogWorkItem = nil
         stopActivityCheckTimer()
     }
 

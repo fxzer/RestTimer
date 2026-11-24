@@ -373,4 +373,24 @@ final class RestTimerTests: XCTestCase {
         }
         XCTAssertEqual(seen.count, 60, "All 60 curated quotes should appear before repeating")
     }
+
+    func testEmergencyExitBreakAlwaysExitsBothRealAndPreviewBreaks() {
+        let manager = TimerManager(activityMonitor: ActivityMonitor(sampler: MockActivitySampler()), autoStart: false)
+        manager.resetTimer()
+
+        // 1. 正式休息态紧急退出
+        manager.startBreakImmediately()
+        XCTAssertTrue(manager.isBreakTime)
+        XCTAssertFalse(manager.isBreakPreview)
+        manager.emergencyExitBreak()
+        XCTAssertFalse(manager.isBreakTime)
+
+        // 2. 主题预览态紧急退出
+        manager.startBreakPreview()
+        XCTAssertTrue(manager.isBreakPreview)
+        XCTAssertTrue(manager.isBreakTime)
+        manager.emergencyExitBreak()
+        XCTAssertFalse(manager.isBreakPreview)
+        XCTAssertFalse(manager.isBreakTime)
+    }
 }

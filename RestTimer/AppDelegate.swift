@@ -73,7 +73,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        TimerManager.shared.preventQuit ? .terminateCancel : .terminateNow
+        // 永不拦截系统退出 / ⌘Q，确保在任何异常场景下用户都能立刻退出应用并清理遮罩
+        TimerManager.shared.emergencyExitBreak()
+        return .terminateNow
     }
 
     deinit {

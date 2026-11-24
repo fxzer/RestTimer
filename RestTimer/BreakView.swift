@@ -15,6 +15,7 @@ struct BreakView: View {
     @State private var breathingIn = false
     @State private var keyEventMonitor: Any?
     @State private var hoveredTheme: BreakGradientTheme?
+    @State private var escapeTapTimestamps: [TimeInterval] = []
 
     private let clockTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     private let breathTimer = Timer.publish(every: 4.0, on: .main, in: .common).autoconnect()
@@ -471,6 +472,23 @@ struct BreakView: View {
         removeKeyboardShortcuts()
         keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             switch event.keyCode {
+            case 53: // Esc：预览态单按即退；正式休息态支持 ⌘⇧Esc 或 1.2 秒内连按 3 次 Esc 紧急逃生
+                if timerManager.isBreakPreview {
+                    timerManager.endBreakPreview()
+                    return nil
+                }
+                let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                if mods.contains([.command, .shift]) {
+                    timerManager.emergencyExitBreak()
+                    return nil
+                }
+                let now = Date().timeIntervalSince1970
+                escapeTapTimestamps = escapeTapTimestamps.filter { now - $0 <= 1.2 } + [now]
+                if escapeTapTimestamps.count >= 3 {
+                    escapeTapTimestamps.removeAll()
+                    timerManager.emergencyExitBreak()
+                }
+                return nil
             case 123: // Left Arrow ←
                 previousExercise()
                 return nil

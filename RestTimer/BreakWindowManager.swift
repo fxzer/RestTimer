@@ -12,14 +12,34 @@ private final class FirstClickHostingView<Content: View>: NSHostingView<Content>
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
-/// 全屏休息遮罩窗口显式状态管理器
+/// 全屏休息遮罩窗口显式状态管理器（绝不遮挡系统强制退出窗，支持外接显示器热插拔重建，退出时彻底释放视图与事件监听）
 final class BreakWindowManager {
     private enum WindowState {
         case hidden
-        case visible(windows: [NSWindow])
+        case visible(windows: [NSWindow], timerManager: TimerManager)
     }
 
     private var state: WindowState = .hidden
+    private var screenObserver: NSObjectProtocol?
+
+    init() {
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleScreenParametersChanged()
+        }
+    }
+
+    deinit {
+        if let observer = screenObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if Thread.isMainThread {
+            tearDownCurrentWindows()
+        }
+    }
 
     func show(timerManager: TimerManager) {
         guard Thread.isMainThread else {
@@ -29,7 +49,10 @@ final class BreakWindowManager {
             return
         }
 
-        hide()
+        tearDownCurrentWindows()
+
+        // 仅比系统菜单栏高 1 级（~25）：完整覆盖桌面、Dock 与全屏应用，但绝不遮挡系统「强制退出 (⌘⌥Esc)」和系统安全弹窗
+        let overlayLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.mainMenuWindow)) + 1)
 
         var windows: [NSWindow] = []
         let mainScreen = NSScreen.main
@@ -43,7 +66,8 @@ final class BreakWindowManager {
                 defer: false
             )
 
-            window.level = .screenSaver
+            window.isReleasedWhenClosed = false
+            window.level = overlayLevel
             window.isOpaque = false
             window.hasShadow = false
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
@@ -75,7 +99,7 @@ final class BreakWindowManager {
             windows.append(window)
         }
 
-        state = .visible(windows: windows)
+        state = .visible(windows: windows, timerManager: timerManager)
         NSApplication.shared.activate(ignoringOtherApps: true)
         primaryWindow?.makeKeyAndOrderFront(nil)
     }
@@ -88,8 +112,21 @@ final class BreakWindowManager {
             return
         }
 
-        guard case .visible(let windows) = state else { return }
-        windows.forEach { $0.orderOut(nil) }
+        tearDownCurrentWindows()
+    }
+
+    private func handleScreenParametersChanged() {
+        guard case .visible(_, let timerManager) = state else { return }
+        show(timerManager: timerManager)
+    }
+
+    private func tearDownCurrentWindows() {
+        guard case .visible(let windows, _) = state else { return }
         state = .hidden
+        for window in windows {
+            window.orderOut(nil)
+            window.contentView = nil
+            window.close()
+        }
     }
 }
