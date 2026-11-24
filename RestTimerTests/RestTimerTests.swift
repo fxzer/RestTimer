@@ -328,9 +328,17 @@ final class RestTimerTests: XCTestCase {
         XCTAssertEqual(decoded.maxDelayMinutes, 5)
         XCTAssertEqual(decoded.showPreBreakCountdown, true)
         XCTAssertEqual(decoded.autoResetOnIdle, true)
+        XCTAssertEqual(decoded.dndOnMeetingOrCall, true)
+        XCTAssertEqual(decoded.dndOnFullscreenMedia, true)
         XCTAssertEqual(decoded.pauseMediaOnBreak, true)
+        XCTAssertEqual(decoded.resumeMediaWithHeadphones, true)
         XCTAssertEqual(decoded.enableBreakExerciseGuide, true)
         XCTAssertEqual(decoded.breakGradientTheme, .autoDayNight)
+
+        // 校验新默认时间：专注 30 分钟 / 提前提醒 2 分钟 / 休息 2 分钟
+        XCTAssertEqual(TimerSettings.default.workDurationMinutes, 30)
+        XCTAssertEqual(TimerSettings.default.earlyNotifyMinutes, 2)
+        XCTAssertEqual(TimerSettings.default.breakDurationMinutes, 2)
     }
 
     func testBreakPreviewRestoresWorkTimerWithoutReset() {
@@ -392,5 +400,69 @@ final class RestTimerTests: XCTestCase {
         manager.emergencyExitBreak()
         XCTAssertFalse(manager.isBreakPreview)
         XCTAssertFalse(manager.isBreakTime)
+    }
+
+    func testDailyBreakStatsRecordsAndResetsAcrossMidnight() {
+        let suiteName = "RestTimerTests.DailyStats.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let store = DailyBreakStatsStore(userDefaults: defaults, storageKey: "testStats")
+        let day1 = Date(timeIntervalSince1970: 1_760_000_000)
+        let day2 = day1.addingTimeInterval(86_400)
+
+        XCTAssertEqual(store.todayStats(now: day1).menuSummary, "今日尚未休息")
+
+        let after1 = store.recordCompletedBreak(seconds: 120, now: day1)
+        XCTAssertEqual(after1.completedCount, 1)
+        XCTAssertEqual(after1.totalBreakSeconds, 120)
+        XCTAssertEqual(after1.menuSummary, "今日已休 1 次 · 2 分钟")
+
+        let after2 = store.recordCompletedBreak(seconds: 120, now: day1)
+        XCTAssertEqual(after2.completedCount, 2)
+        XCTAssertEqual(after2.menuSummary, "今日已休 2 次 · 4 分钟")
+
+        // 跨日自动清零
+        let nextDay = store.todayStats(now: day2)
+        XCTAssertEqual(nextDay.completedCount, 0)
+        XCTAssertEqual(nextDay.menuSummary, "今日尚未休息")
+    }
+
+    func testMeetingAndFullscreenDNDDefersBreakUntilEnded() {
+        final class MockContext: SmartContextProviding {
+            var inMeeting = true
+            var fullscreenMedia = false
+            var headphones = true
+            func isInMeetingOrCall() -> Bool { inMeeting }
+            func isFullscreenMediaOrPresentation() -> Bool { fullscreenMedia }
+            func isHeadphonesOutputConnected() -> Bool { headphones }
+        }
+
+        let sampler = MockActivitySampler()
+        sampler.keyboardIdle = 30
+        sampler.mouseActionIdle = 30
+        let context = MockContext()
+        let manager = TimerManager(
+            activityMonitor: ActivityMonitor(sampler: sampler),
+            contextProvider: context,
+            autoStart: false
+        )
+        manager.settings.dndOnMeetingOrCall = true
+        manager.settings.dndOnFullscreenMedia = true
+
+        let exp = expectation(description: "wait work timer")
+        _ = manager.updateTimeSettings(
+            workMinutes: 0, workSeconds: 1,
+            breakMinutes: 0, breakSeconds: 2,
+            earlyMinutes: 0, earlySeconds: 0
+        )
+        manager.resetTimer()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) {
+            XCTAssertFalse(manager.isBreakTime, "Should defer break while in meeting")
+            XCTAssertTrue(manager.isDeferredByDND, "Should mark deferred by DND")
+            context.inMeeting = false
+            exp.fulfill()
+        }
+        wait(for: [exp], timeout: 3.0)
     }
 }
