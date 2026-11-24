@@ -186,7 +186,7 @@ struct SystemSmartContextProvider: SmartContextProviding {
             let status = withUnsafeMutablePointer(to: &unmanagedBundle) { ptr in
                 AudioObjectGetPropertyData(objID, &bAddr, 0, nil, &bSize, ptr)
             }
-            let lower = ((status == noErr ? unmanagedBundle?.takeUnretainedValue() as String? : nil) ?? "").lowercased()
+            let lower = ((status == noErr ? unmanagedBundle?.takeRetainedValue() as String? : nil) ?? "").lowercased()
 
             // 过滤系统底层音频驱动、语音听写及输入法语音进程，仅针对真实会议/通话/录屏软件
             if lower == selfBundle
@@ -352,11 +352,28 @@ final class DailyBreakStatsStore {
         appendEvent(event, now: now)
     }
 
+    /// 一次性聚合全部快照数据（单次 JSON 反序列化与分组，单次计算供今日/本周/112天复用）
+    func makeFullSnapshot(now: Date = Date()) -> (
+        todayEvents: [BreakEventRecord],
+        weeklyBuckets: [DailyStatsBucket],
+        heatmapBuckets: [DailyStatsBucket]
+    ) {
+        let history = loadHistory(now: now)
+        let today = Self.dayKey(for: now)
+        let todayEvents = history
+            .filter { Self.dayKey(for: Date(timeIntervalSince1970: $0.timestamp)) == today }
+            .sorted { $0.timestamp < $1.timestamp }
+
+        let heatmap = dailyBuckets(days: 112, now: now, preloadedHistory: history)
+        let weekly = Array(heatmap.suffix(7))
+        return (todayEvents, weekly, heatmap)
+    }
+
     /// 聚合近 N 天的每日汇总桶（从早到晚，最后一项为今日）
-    func dailyBuckets(days: Int, now: Date = Date()) -> [DailyStatsBucket] {
+    func dailyBuckets(days: Int, now: Date = Date(), preloadedHistory: [BreakEventRecord]? = nil) -> [DailyStatsBucket] {
         let calendar = Calendar.current
         let todayStart = calendar.startOfDay(for: now)
-        let history = loadHistory(now: now)
+        let history = preloadedHistory ?? loadHistory(now: now)
 
         var grouped: [String: [BreakEventRecord]] = [:]
         for record in history {
@@ -366,6 +383,7 @@ final class DailyBreakStatsStore {
 
         let weekdaySymbols = ["日", "一", "二", "三", "四", "五", "六"]
         var result: [DailyStatsBucket] = []
+        result.reserveCapacity(days)
         for offset in stride(from: days - 1, through: 0, by: -1) {
             guard let dayDate = calendar.date(byAdding: .day, value: -offset, to: todayStart) else { continue }
             let key = Self.dayKey(for: dayDate)
@@ -413,10 +431,14 @@ final class DailyBreakStatsStore {
         }
     }
 
-    static func dayKey(for date: Date) -> String {
+    private static let dayKeyFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    static func dayKey(for date: Date) -> String {
+        dayKeyFormatter.string(from: date)
     }
 }

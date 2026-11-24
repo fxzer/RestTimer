@@ -46,6 +46,8 @@ internal final class TimerManager: ObservableObject {
     private var pendingHeadphoneMediaResumeDeadline: TimeInterval?
     private var lastWorkSegmentFocusSeconds: Int = 0
     private var isAdjustingSettings = false
+    private var lastDndCheckTimestamp: TimeInterval = 0
+    private var cachedDndResult: Bool = false
 
     // MARK: - 派生属性（全部源自单一状态机与配置，杜绝镜像失步）
 
@@ -76,17 +78,13 @@ internal final class TimerManager: ObservableObject {
         }
     }
 
-    /// 供设置页「统计」Tab 读取今日节律、近 7 日柱图与近 16 周热力数据
+    /// 供设置页「统计」Tab 读取今日节律、近 7 日柱图与近 16 周热力数据（单次聚合，避免重复 I/O 与反序列化）
     func makeStatsSnapshot(now: Date = Date()) -> (
         todayEvents: [BreakEventRecord],
         weeklyBuckets: [DailyStatsBucket],
         heatmapBuckets: [DailyStatsBucket]
     ) {
-        (
-            dailyStatsStore.eventsForDay(now: now),
-            dailyStatsStore.dailyBuckets(days: 7, now: now),
-            dailyStatsStore.dailyBuckets(days: 112, now: now)
-        )
+        dailyStatsStore.makeFullSnapshot(now: now)
     }
 
     var smartDelayConfig: SmartDelayConfig {
@@ -364,6 +362,7 @@ internal final class TimerManager: ObservableObject {
         earlyMinutes: Int,
         earlySeconds: Int
     ) -> Result<Void, TimeSettingsValidationError> {
+        assert(Thread.isMainThread, "updateTimeSettings must be called on main thread")
         let validation = TimerSettings.validateTimeValues(
             workMinutes: workMinutes,
             workSeconds: workSeconds,
@@ -551,14 +550,20 @@ internal final class TimerManager: ObservableObject {
         }
     }
 
-    private func shouldDeferForDoNotDisturb() -> Bool {
+    private func shouldDeferForDoNotDisturb(forceRefresh: Bool = false) -> Bool {
+        let now = Date().timeIntervalSince1970
+        if !forceRefresh && (now - lastDndCheckTimestamp < 2.0) {
+            return cachedDndResult
+        }
+        lastDndCheckTimestamp = now
+        var result = false
         if settings.dndOnMeetingOrCall && contextProvider.isInMeetingOrCall() {
-            return true
+            result = true
+        } else if settings.dndOnFullscreenMedia && contextProvider.isFullscreenMediaOrPresentation() {
+            result = true
         }
-        if settings.dndOnFullscreenMedia && contextProvider.isFullscreenMediaOrPresentation() {
-            return true
-        }
-        return false
+        cachedDndResult = result
+        return result
     }
 
     private func handleWorkTimerExpired() {
@@ -567,7 +572,7 @@ internal final class TimerManager: ObservableObject {
     }
 
     private func handleWorkExpiredFromResume() {
-        if shouldDeferForDoNotDisturb() {
+        if shouldDeferForDoNotDisturb(forceRefresh: true) {
             isDeferredByDND = true
             transition(to: .pendingBreak(startedAt: Date().timeIntervalSince1970, overdue: 0))
             return

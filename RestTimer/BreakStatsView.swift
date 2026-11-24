@@ -15,11 +15,27 @@ struct BreakStatsView: View {
     @State private var hoveredEvent: BreakEventRecord?
     @State private var hoveredWeekBucket: DailyStatsBucket?
     @State private var hoveredHeatBucket: DailyStatsBucket?
+    @State private var cachedSnapshot: (
+        todayEvents: [BreakEventRecord],
+        weeklyBuckets: [DailyStatsBucket],
+        heatmapBuckets: [DailyStatsBucket]
+    )?
+
+    private var currentSnapshot: (
+        todayEvents: [BreakEventRecord],
+        weeklyBuckets: [DailyStatsBucket],
+        heatmapBuckets: [DailyStatsBucket]
+    ) {
+        cachedSnapshot ?? timerManager.makeStatsSnapshot(now: Date())
+    }
+
+    private func refreshSnapshot() {
+        cachedSnapshot = timerManager.makeStatsSnapshot(now: Date())
+    }
 
     var body: some View {
-        let _ = timerManager.statsVersion
         let now = Date()
-        let snapshot = timerManager.makeStatsSnapshot(now: now)
+        let snapshot = currentSnapshot
         let todayBucket = snapshot.weeklyBuckets.last
         let liveFocus = timerManager.currentActiveFocusElapsedSeconds
 
@@ -41,6 +57,8 @@ struct BreakStatsView: View {
             // 卡片 3：近 16 周健康热力方格（112 天）
             heatmapCard(buckets: snapshot.heatmapBuckets)
         }
+        .onAppear { refreshSnapshot() }
+        .onChange(of: timerManager.statsVersion) { _ in refreshSnapshot() }
     }
 
     // MARK: - 卡片 1：核心身体指标（休息次数 / 休息时长 / 最长连坐或完成率）
@@ -414,15 +432,11 @@ struct BreakStatsView: View {
     // MARK: - 格式化与布局辅助
 
     private static let hourMinuteFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
+        let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
     }()
 
     private static let monthDayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "M月d日"
-        return f
+        let f = DateFormatter(); f.dateFormat = "M月d日"; return f
     }()
 
     private func heatColor(forCount count: Int) -> Color {
@@ -437,31 +451,22 @@ struct BreakStatsView: View {
 
     private func chunkIntoWeeks(_ buckets: [DailyStatsBucket], rows: Int) -> [[DailyStatsBucket]] {
         guard rows > 0 else { return [] }
-        var cols: [[DailyStatsBucket]] = []
-        var idx = 0
-        while idx < buckets.count {
-            let end = min(buckets.count, idx + rows)
-            cols.append(Array(buckets[idx..<end]))
-            idx = end
+        return stride(from: 0, to: buckets.count, by: rows).map {
+            Array(buckets[$0..<min($0 + rows, buckets.count)])
         }
-        return cols
     }
 
     private func timelineRatio(for date: Date) -> CGFloat? {
         let comps = Calendar.current.dateComponents([.hour, .minute], from: date)
         let mins = Double((comps.hour ?? 0) * 60 + (comps.minute ?? 0))
-        let start = 8.0 * 60.0
-        let end = 23.0 * 60.0
-        guard mins >= start && mins <= end else { return nil }
-        return CGFloat((mins - start) / (end - start))
+        guard mins >= 480 && mins <= 1380 else { return nil }
+        return CGFloat((mins - 480) / 900)
     }
 
     private func clampedTimelineRatio(for date: Date) -> CGFloat {
         let comps = Calendar.current.dateComponents([.hour, .minute], from: date)
         let mins = Double((comps.hour ?? 0) * 60 + (comps.minute ?? 0))
-        let start = 8.0 * 60.0
-        let end = 23.0 * 60.0
-        return CGFloat(min(1.0, max(0.0, (mins - start) / (end - start))))
+        return CGFloat(min(1.0, max(0.0, (mins - 480) / 900)))
     }
 
     private func formatDuration(_ seconds: Int) -> String {

@@ -332,7 +332,7 @@ enum MediaPlaybackPauser {
             let status = withUnsafeMutablePointer(to: &unmanagedBundle) { ptr in
                 AudioObjectGetPropertyData(objID, &bAddr, 0, nil, &bSize, ptr)
             }
-            let bundleID = (status == noErr ? unmanagedBundle?.takeUnretainedValue() as String? : nil) ?? ""
+            let bundleID = (status == noErr ? unmanagedBundle?.takeRetainedValue() as String? : nil) ?? ""
             let lower = bundleID.lowercased()
 
             // 过滤系统底层音频驱动、语音识别及输入法语音进程
