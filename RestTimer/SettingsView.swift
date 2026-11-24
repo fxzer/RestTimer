@@ -335,10 +335,36 @@ struct SettingsView: View {
 
             SettingsCardContainer {
                 settingsToggleRow(
+                    icon: "video.slash",
+                    title: "会议/通话免打扰",
+                    isOn: $timerManager.settings.dndOnMeetingOrCall
+                )
+
+                SettingsHairlineDivider()
+
+                settingsToggleRow(
+                    icon: "play.rectangle",
+                    title: "全屏演示/视频免打扰",
+                    isOn: $timerManager.settings.dndOnFullscreenMedia
+                )
+            }
+
+            SettingsCardContainer {
+                settingsToggleRow(
                     icon: "pause.circle",
                     title: "休息时暂停媒体",
                     isOn: $timerManager.settings.pauseMediaOnBreak
                 )
+
+                SettingsHairlineDivider()
+
+                settingsToggleRow(
+                    icon: "headphones",
+                    title: "耳机在位自动续播",
+                    isOn: $timerManager.settings.resumeMediaWithHeadphones
+                )
+                .disabled(!timerManager.settings.pauseMediaOnBreak)
+                .opacity(timerManager.settings.pauseMediaOnBreak ? 1.0 : 0.45)
             }
         }
     }

@@ -256,8 +256,8 @@ struct TimePreset: Identifiable {
 
     static let defaults: [TimePreset] = [
         TimePreset(id: "eyecare", symbol: "eye", title: "20分 护眼", workMinutes: 20, earlyMinutes: 1, breakSeconds: 60),
-        TimePreset(id: "pomodoro", symbol: "timer", title: "25分 番茄", workMinutes: 25, earlyMinutes: 2, breakSeconds: 300),
-        TimePreset(id: "standard", symbol: "figure.walk", title: "45分 标准", workMinutes: 45, earlyMinutes: 2, breakSeconds: 300)
+        TimePreset(id: "standard", symbol: "timer", title: "30分 标准", workMinutes: 30, earlyMinutes: 2, breakSeconds: 120),
+        TimePreset(id: "deep", symbol: "figure.walk", title: "45分 深度", workMinutes: 45, earlyMinutes: 2, breakSeconds: 300)
     ]
 }
 
