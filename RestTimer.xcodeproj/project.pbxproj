@@ -27,6 +27,7 @@
 		C3A1B20E2D10000100A0A60D /* FocusClockDialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B20D2D10000100A0A60D /* FocusClockDialView.swift */; };
 		C3A1B2102D10000100A0A60D /* BreakExerciseCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B20F2D10000100A0A60D /* BreakExerciseCardView.swift */; };
 		C3A1B2122D10000100A0A60D /* CuratedQuotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B2112D10000100A0A60D /* CuratedQuotes.swift */; };
+		C3A1B2142D10000100A0A60D /* SmartContextMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B2132D10000100A0A60D /* SmartContextMonitor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,6 +72,7 @@
 		C3A1B20D2D10000100A0A60D /* FocusClockDialView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusClockDialView.swift; sourceTree = "<group>"; };
 		C3A1B20F2D10000100A0A60D /* BreakExerciseCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakExerciseCardView.swift; sourceTree = "<group>"; };
 		C3A1B2112D10000100A0A60D /* CuratedQuotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CuratedQuotes.swift; sourceTree = "<group>"; };
+		C3A1B2132D10000100A0A60D /* SmartContextMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartContextMonitor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -136,6 +138,7 @@
 				C3A1B20D2D10000100A0A60D /* FocusClockDialView.swift */,
 				C3A1B20F2D10000100A0A60D /* BreakExerciseCardView.swift */,
 				C3A1B2112D10000100A0A60D /* CuratedQuotes.swift */,
+				C3A1B2132D10000100A0A60D /* SmartContextMonitor.swift */,
 				C3E3E3102D03F1F300A0A60D /* Assets.xcassets */,
 				C3E3E3122D03F1F300A0A60D /* RestTimer.entitlements */,
 				C3E3E3132D03F1F300A0A60D /* Preview Content */,
@@ -313,6 +316,7 @@
 				C3A1B20E2D10000100A0A60D /* FocusClockDialView.swift in Sources */,
 				C3A1B2102D10000100A0A60D /* BreakExerciseCardView.swift in Sources */,
 				C3A1B2122D10000100A0A60D /* CuratedQuotes.swift in Sources */,
+				C3A1B2142D10000100A0A60D /* SmartContextMonitor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

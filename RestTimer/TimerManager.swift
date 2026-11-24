@@ -17,6 +17,8 @@ internal final class TimerManager: ObservableObject {
 
     @Published private(set) var state: SessionState = .idle
     @Published private(set) var isBreakPreview: Bool = false
+    @Published private(set) var isDeferredByDND: Bool = false
+    @Published private(set) var todayStats: DailyBreakStats
     @Published var settings: TimerSettings {
         didSet {
             handleSettingsDidChange(from: oldValue)
@@ -24,6 +26,8 @@ internal final class TimerManager: ObservableObject {
     }
 
     private let activityMonitor: ActivityMonitor
+    private let contextProvider: SmartContextProviding
+    private let dailyStatsStore: DailyBreakStatsStore
     private let preBreakHud = PreBreakHudManager()
     private let toastOverlay = NotificationOverlayManager()
     private let breakWindowManager = BreakWindowManager()
@@ -37,6 +41,8 @@ internal final class TimerManager: ObservableObject {
     private var startupWorkItem: DispatchWorkItem?
     private var dockPolicyWorkItem: DispatchWorkItem?
     private var previewRestoreTarget: PreviewRestoreTarget?
+    private var didAutoPauseMediaForCurrentBreak = false
+    private var pendingHeadphoneMediaResumeDeadline: TimeInterval?
     private var isAdjustingSettings = false
 
     // MARK: - 派生属性（全部源自单一状态机与配置，杜绝镜像失步）
@@ -67,9 +73,14 @@ internal final class TimerManager: ObservableObject {
 
     init(
         activityMonitor: ActivityMonitor = ActivityMonitor(),
+        contextProvider: SmartContextProviding = SystemSmartContextProvider(),
+        dailyStatsStore: DailyBreakStatsStore = DailyBreakStatsStore(),
         autoStart: Bool = true
     ) {
         self.activityMonitor = activityMonitor
+        self.contextProvider = contextProvider
+        self.dailyStatsStore = dailyStatsStore
+        self.todayStats = dailyStatsStore.todayStats()
 
         let loadedSettings: TimerSettings
         if let data = UserDefaults.standard.data(forKey: Self.settingsKey),
@@ -111,7 +122,17 @@ internal final class TimerManager: ObservableObject {
                 self.endBreakPreview()
                 return
             }
+            self.handleHeadphoneMediaResumeAfterBreak(userIsPresent: true)
             self.transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: true)
+        }
+    }
+
+    func refreshTodayStats() {
+        runOnMain {
+            let latest = self.dailyStatsStore.todayStats()
+            if latest != self.todayStats {
+                self.todayStats = latest
+            }
         }
     }
 
@@ -355,6 +376,7 @@ internal final class TimerManager: ObservableObject {
             toastOverlay.dismissImmediately()
 
         case .working(let startedAt):
+            isDeferredByDND = false
             breakWindowManager.hide()
             preBreakHud.hide()
             activityMonitor.resetBaseline()
@@ -386,10 +408,14 @@ internal final class TimerManager: ObservableObject {
             evaluateActivityTick()
 
         case .breaking(let initialRemaining):
+            isDeferredByDND = false
+            pendingHeadphoneMediaResumeDeadline = nil
             preBreakHud.hide()
             toastOverlay.dismissImmediately()
             if !wasBreaking && !isBreakPreview && settings.pauseMediaOnBreak {
-                MediaPlaybackPauser.pauseActiveMediaIfNeeded()
+                didAutoPauseMediaForCurrentBreak = MediaPlaybackPauser.pauseActiveMediaIfNeeded()
+            } else if !wasBreaking {
+                didAutoPauseMediaForCurrentBreak = false
             }
             breakWindowManager.show(timerManager: self)
 
@@ -455,12 +481,38 @@ internal final class TimerManager: ObservableObject {
         if isBreakPreview {
             endBreakPreview()
         } else {
+            todayStats = dailyStatsStore.recordCompletedBreak(seconds: Int(breakDuration))
             // 休息自然结束时播放一声轻柔系统提示音，方便闭眼拉伸或离座时知晓
             if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
                 NSSound(named: NSSound.Name("Glass"))?.play()
             }
+            let idle = activityMonitor.idleDuration(monitorKeyboard: true, monitorMouse: true)
+            handleHeadphoneMediaResumeAfterBreak(userIsPresent: idle < 3.0)
             transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: true)
         }
+    }
+
+    private func handleHeadphoneMediaResumeAfterBreak(userIsPresent: Bool) {
+        guard didAutoPauseMediaForCurrentBreak else { return }
+        didAutoPauseMediaForCurrentBreak = false
+        guard settings.pauseMediaOnBreak && settings.resumeMediaWithHeadphones else { return }
+
+        if userIsPresent {
+            _ = MediaPlaybackPauser.resumePausedMediaIfHeadphonesConnected(contextProvider: contextProvider)
+        } else {
+            // 用户尚在离开状态：挂起 90 秒观察窗，回到工位动键鼠且耳机在位时再无缝续播，绝不外放
+            pendingHeadphoneMediaResumeDeadline = Date().timeIntervalSince1970 + 90.0
+        }
+    }
+
+    private func shouldDeferForDoNotDisturb() -> Bool {
+        if settings.dndOnMeetingOrCall && contextProvider.isInMeetingOrCall() {
+            return true
+        }
+        if settings.dndOnFullscreenMedia && contextProvider.isFullscreenMediaOrPresentation() {
+            return true
+        }
+        return false
     }
 
     private func handleWorkTimerExpired() {
@@ -469,6 +521,12 @@ internal final class TimerManager: ObservableObject {
     }
 
     private func handleWorkExpiredFromResume() {
+        if shouldDeferForDoNotDisturb() {
+            isDeferredByDND = true
+            transition(to: .pendingBreak(startedAt: Date().timeIntervalSince1970, overdue: 0))
+            return
+        }
+
         let config = smartDelayConfig
         guard config.enabled && config.hasAnyMonitorEnabled else {
             transition(to: .breaking(remaining: breakDuration))
@@ -501,8 +559,20 @@ internal final class TimerManager: ObservableObject {
             if settings.smartDelayEnabled && settings.monitorMouse {
                 activityMonitor.sampleMouseMovement()
             }
+            let idle = activityMonitor.idleDuration(monitorKeyboard: true, monitorMouse: true)
+            // 休息结束用户回到工位且耳机在位时自动续播先前暂停的媒体
+            if let resumeDeadline = pendingHeadphoneMediaResumeDeadline {
+                let now = Date().timeIntervalSince1970
+                if now > resumeDeadline {
+                    pendingHeadphoneMediaResumeDeadline = nil
+                } else if idle < 2.0 {
+                    pendingHeadphoneMediaResumeDeadline = nil
+                    if settings.pauseMediaOnBreak && settings.resumeMediaWithHeadphones {
+                        _ = MediaPlaybackPauser.resumePausedMediaIfHeadphonesConnected(contextProvider: contextProvider)
+                    }
+                }
+            }
             if settings.autoResetOnIdle {
-                let idle = activityMonitor.idleDuration(monitorKeyboard: true, monitorMouse: true)
                 let elapsedWork = Date().timeIntervalSince1970 - startedAt
                 if BreakDelayEvaluator.shouldEnterAwayState(
                     elapsedWork: elapsedWork,
@@ -521,6 +591,18 @@ internal final class TimerManager: ObservableObject {
             }
 
         case .pendingBreak(let startedAt, _):
+            // 会议/通话/全屏演示视频免打扰优先级最高：期间静默顺延，绝不强行打断
+            if shouldDeferForDoNotDisturb() {
+                isDeferredByDND = true
+                preBreakHud.hide()
+                let now = Date().timeIntervalSince1970
+                state = .pendingBreak(startedAt: now, overdue: 0)
+                return
+            }
+            if isDeferredByDND {
+                isDeferredByDND = false
+            }
+
             let config = smartDelayConfig
             guard config.enabled && config.hasAnyMonitorEnabled else {
                 transition(to: .breaking(remaining: breakDuration))

@@ -238,31 +238,53 @@ import CoreAudio
 /// 确保仅在真有音乐/浏览器视频/播客正在出声时安全暂停，绝不在静默时误唤醒播放器。
 enum MediaPlaybackPauser {
     private typealias MRMediaRemoteSendCommandFn = @convention(c) (UInt32, AnyObject?) -> Bool
+    private static let kMRPlayCommand: UInt32 = 0
     private static let kMRPauseCommand: UInt32 = 1
     private static let nxKeyTypePlay: Int = 16
 
-    /// 进入休息时调用：若当前有正在出声的媒体应用，自动将其暂停
-    static func pauseActiveMediaIfNeeded() {
+    /// 进入休息时调用：若当前有正在出声的媒体应用，自动将其暂停并返回 true（供休息结束后耳机在位续播判断）
+    @discardableResult
+    static func pauseActiveMediaIfNeeded() -> Bool {
         // 单元测试环境下不触发系统媒体控制
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else {
-            return
+            return false
         }
 
         let wasPlayingAudio = isAnyUserMediaOutputtingAudio()
 
         // 1. 优先发送显式 kMRPause (1) 指令（即使当前无播放也是安全空操作，绝不会反向触发播放）
-        _ = sendMediaRemotePauseCommand()
+        _ = sendMediaRemoteCommand(kMRPauseCommand)
 
         // 2. 若入场时检测到有应用正在出声，120ms 后复查 CoreAudio 输出流；
-        //    若仍在出声（例如 macOS 15.4+/26+ 限制了非系统签名的 MediaRemote 或目标播放器仅响应硬件媒体键），
-        //    则在确认“正在出声”的前提下发送一次硬件媒体暂停键（NX_KEYTYPE_PLAY），精准暂停浏览器视频/音乐/播客。
-        guard wasPlayingAudio else { return }
+        //    若仍在出声，则在确认“正在出声”的前提下发送一次硬件媒体暂停键（NX_KEYTYPE_PLAY）。
+        guard wasPlayingAudio else { return false }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
             if isAnyUserMediaOutputtingAudio() {
                 postHardwareMediaPlayPauseKey()
             }
         }
+        return true
+    }
+
+    /// 仅当本次休息曾由 RestTimer 主动暂停过媒体，且当前音频输出确认为耳机（非外放扬声器）且当前仍处于静音时，安全续播
+    @discardableResult
+    static func resumePausedMediaIfHeadphonesConnected(contextProvider: SmartContextProviding) -> Bool {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else {
+            return false
+        }
+        guard contextProvider.isHeadphonesOutputConnected(), !isAnyUserMediaOutputtingAudio() else {
+            return false
+        }
+
+        _ = sendMediaRemoteCommand(kMRPlayCommand)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            if contextProvider.isHeadphonesOutputConnected() && !isAnyUserMediaOutputtingAudio() {
+                postHardwareMediaPlayPauseKey()
+            }
+        }
+        return true
     }
 
     /// 通过 CoreAudio `kAudioHardwarePropertyProcessObjectList` + `kAudioProcessPropertyIsRunningOutput`
@@ -329,13 +351,13 @@ enum MediaPlaybackPauser {
         return false
     }
 
-    private static func sendMediaRemotePauseCommand() -> Bool {
+    private static func sendMediaRemoteCommand(_ command: UInt32) -> Bool {
         guard let handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_LAZY),
               let sym = dlsym(handle, "MRMediaRemoteSendCommand") else {
             return false
         }
         let fn = unsafeBitCast(sym, to: MRMediaRemoteSendCommandFn.self)
-        return fn(kMRPauseCommand, nil)
+        return fn(command, nil)
     }
 
     private static func postHardwareMediaPlayPauseKey() {

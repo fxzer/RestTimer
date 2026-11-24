@@ -169,16 +169,19 @@ struct TimerSettings: Codable, Equatable {
     var maxDelayMinutes: Int = 5
     var showPreBreakCountdown: Bool = true
     var autoResetOnIdle: Bool = true
+    var dndOnMeetingOrCall: Bool = true
+    var dndOnFullscreenMedia: Bool = true
     var pauseMediaOnBreak: Bool = true
+    var resumeMediaWithHeadphones: Bool = true
     var enableBreakExerciseGuide: Bool = true
     var breakGradientTheme: BreakGradientTheme = .autoDayNight
 
     static let `default` = TimerSettings(
         showSkipButton: false,
         showDockIcon: true,
-        workDurationMinutes: 45,
+        workDurationMinutes: 30,
         workDurationSeconds: 0,
-        breakDurationMinutes: 5,
+        breakDurationMinutes: 2,
         breakDurationSeconds: 0,
         earlyNotifyMinutes: 2,
         earlyNotifySeconds: 0,
@@ -189,7 +192,10 @@ struct TimerSettings: Codable, Equatable {
         maxDelayMinutes: 5,
         showPreBreakCountdown: true,
         autoResetOnIdle: true,
+        dndOnMeetingOrCall: true,
+        dndOnFullscreenMedia: true,
         pauseMediaOnBreak: true,
+        resumeMediaWithHeadphones: true,
         enableBreakExerciseGuide: true,
         breakGradientTheme: .autoDayNight
     )
@@ -210,7 +216,10 @@ struct TimerSettings: Codable, Equatable {
         maxDelayMinutes: Int = 5,
         showPreBreakCountdown: Bool = true,
         autoResetOnIdle: Bool = true,
+        dndOnMeetingOrCall: Bool = true,
+        dndOnFullscreenMedia: Bool = true,
         pauseMediaOnBreak: Bool = true,
+        resumeMediaWithHeadphones: Bool = true,
         enableBreakExerciseGuide: Bool = true,
         breakGradientTheme: BreakGradientTheme = .autoDayNight
     ) {
@@ -229,7 +238,10 @@ struct TimerSettings: Codable, Equatable {
         self.maxDelayMinutes = maxDelayMinutes
         self.showPreBreakCountdown = showPreBreakCountdown
         self.autoResetOnIdle = autoResetOnIdle
+        self.dndOnMeetingOrCall = dndOnMeetingOrCall
+        self.dndOnFullscreenMedia = dndOnFullscreenMedia
         self.pauseMediaOnBreak = pauseMediaOnBreak
+        self.resumeMediaWithHeadphones = resumeMediaWithHeadphones
         self.enableBreakExerciseGuide = enableBreakExerciseGuide
         self.breakGradientTheme = breakGradientTheme
     }
@@ -252,7 +264,10 @@ struct TimerSettings: Codable, Equatable {
         maxDelayMinutes = try container.decodeIfPresent(Int.self, forKey: .maxDelayMinutes) ?? fallback.maxDelayMinutes
         showPreBreakCountdown = try container.decodeIfPresent(Bool.self, forKey: .showPreBreakCountdown) ?? fallback.showPreBreakCountdown
         autoResetOnIdle = try container.decodeIfPresent(Bool.self, forKey: .autoResetOnIdle) ?? fallback.autoResetOnIdle
+        dndOnMeetingOrCall = try container.decodeIfPresent(Bool.self, forKey: .dndOnMeetingOrCall) ?? fallback.dndOnMeetingOrCall
+        dndOnFullscreenMedia = try container.decodeIfPresent(Bool.self, forKey: .dndOnFullscreenMedia) ?? fallback.dndOnFullscreenMedia
         pauseMediaOnBreak = try container.decodeIfPresent(Bool.self, forKey: .pauseMediaOnBreak) ?? fallback.pauseMediaOnBreak
+        resumeMediaWithHeadphones = try container.decodeIfPresent(Bool.self, forKey: .resumeMediaWithHeadphones) ?? fallback.resumeMediaWithHeadphones
         enableBreakExerciseGuide = try container.decodeIfPresent(Bool.self, forKey: .enableBreakExerciseGuide) ?? fallback.enableBreakExerciseGuide
         breakGradientTheme = try container.decodeIfPresent(BreakGradientTheme.self, forKey: .breakGradientTheme) ?? fallback.breakGradientTheme
     }
