@@ -23,6 +23,10 @@
 		C3A1B2062D10000100A0A60D /* TimerState.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B2052D10000100A0A60D /* TimerState.swift */; };
 		C3A1B2082D10000100A0A60D /* NotificationOverlayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B2072D10000100A0A60D /* NotificationOverlayManager.swift */; };
 		C3A1B20A2D10000100A0A60D /* BreakWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B2092D10000100A0A60D /* BreakWindowManager.swift */; };
+		C3A1B20C2D10000100A0A60D /* StretchExercise.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B20B2D10000100A0A60D /* StretchExercise.swift */; };
+		C3A1B20E2D10000100A0A60D /* FocusClockDialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B20D2D10000100A0A60D /* FocusClockDialView.swift */; };
+		C3A1B2102D10000100A0A60D /* BreakExerciseCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B20F2D10000100A0A60D /* BreakExerciseCardView.swift */; };
+		C3A1B2122D10000100A0A60D /* CuratedQuotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B2112D10000100A0A60D /* CuratedQuotes.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +67,10 @@
 		C3A1B2052D10000100A0A60D /* TimerState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerState.swift; sourceTree = "<group>"; };
 		C3A1B2072D10000100A0A60D /* NotificationOverlayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationOverlayManager.swift; sourceTree = "<group>"; };
 		C3A1B2092D10000100A0A60D /* BreakWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakWindowManager.swift; sourceTree = "<group>"; };
+		C3A1B20B2D10000100A0A60D /* StretchExercise.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StretchExercise.swift; sourceTree = "<group>"; };
+		C3A1B20D2D10000100A0A60D /* FocusClockDialView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusClockDialView.swift; sourceTree = "<group>"; };
+		C3A1B20F2D10000100A0A60D /* BreakExerciseCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakExerciseCardView.swift; sourceTree = "<group>"; };
+		C3A1B2112D10000100A0A60D /* CuratedQuotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CuratedQuotes.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -124,6 +132,10 @@
 				C3A1B2052D10000100A0A60D /* TimerState.swift */,
 				C3A1B2072D10000100A0A60D /* NotificationOverlayManager.swift */,
 				C3A1B2092D10000100A0A60D /* BreakWindowManager.swift */,
+				C3A1B20B2D10000100A0A60D /* StretchExercise.swift */,
+				C3A1B20D2D10000100A0A60D /* FocusClockDialView.swift */,
+				C3A1B20F2D10000100A0A60D /* BreakExerciseCardView.swift */,
+				C3A1B2112D10000100A0A60D /* CuratedQuotes.swift */,
 				C3E3E3102D03F1F300A0A60D /* Assets.xcassets */,
 				C3E3E3122D03F1F300A0A60D /* RestTimer.entitlements */,
 				C3E3E3132D03F1F300A0A60D /* Preview Content */,
@@ -297,6 +309,10 @@
 				C3A1B2062D10000100A0A60D /* TimerState.swift in Sources */,
 				C3A1B2082D10000100A0A60D /* NotificationOverlayManager.swift in Sources */,
 				C3A1B20A2D10000100A0A60D /* BreakWindowManager.swift in Sources */,
+				C3A1B20C2D10000100A0A60D /* StretchExercise.swift in Sources */,
+				C3A1B20E2D10000100A0A60D /* FocusClockDialView.swift in Sources */,
+				C3A1B2102D10000100A0A60D /* BreakExerciseCardView.swift in Sources */,
+				C3A1B2122D10000100A0A60D /* CuratedQuotes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -456,7 +472,7 @@
 				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = RestTimer/RestTimer.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_ASSET_PATHS = "\"RestTimer/Preview Content\"";
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				ENABLE_PREVIEWS = YES;
@@ -475,7 +491,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.7;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = fxzer.top.RestTimer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -495,7 +511,7 @@
 				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = RestTimer/RestTimer.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_ASSET_PATHS = "\"RestTimer/Preview Content\"";
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				ENABLE_PREVIEWS = YES;
@@ -514,7 +530,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.7;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = fxzer.top.RestTimer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -531,11 +547,11 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				MACOSX_DEPLOYMENT_TARGET = 13.7;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = fxzer.top.RestTimerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -553,11 +569,11 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				MACOSX_DEPLOYMENT_TARGET = 13.7;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = fxzer.top.RestTimerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -574,11 +590,11 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				MACOSX_DEPLOYMENT_TARGET = 13.7;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = fxzer.top.RestTimerUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -595,11 +611,11 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				MACOSX_DEPLOYMENT_TARGET = 13.7;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = fxzer.top.RestTimerUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
