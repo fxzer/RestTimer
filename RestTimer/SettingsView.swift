@@ -1,361 +1,480 @@
 import SwiftUI
 import ServiceManagement
 
+private enum SettingsTab: String, CaseIterable, Identifiable {
+    case clockAndRhythm = "时间"
+    case smartDelay = "防打断"
+    case appearanceAndGeneral = "通用"
+
+    var id: String { rawValue }
+
+    var iconName: String {
+        switch self {
+        case .clockAndRhythm:
+            return "clock"
+        case .smartDelay:
+            return "hand.raised"
+        case .appearanceAndGeneral:
+            return "gearshape"
+        }
+    }
+}
+
 struct SettingsView: View {
     @EnvironmentObject var timerManager: TimerManager
+    @Namespace private var tabSelectionNamespace
 
-    @State private var launchAtLogin: Bool
-    @State private var workMinutes: String
-    @State private var workSeconds: String
-    @State private var breakMinutes: String
-    @State private var breakSeconds: String
-    @State private var earlyNotifyMinutes: String
-    @State private var earlyNotifySeconds: String
-
+    @State private var activeTab: SettingsTab = .clockAndRhythm
+    @State private var launchAtLogin: Bool = false
     @State private var showAlert = false
     @State private var alertMessage = ""
 
+    private let presets = TimePreset.defaults
+    private let breakOptions: [(label: String, seconds: Int)] = [
+        ("1分", 60),
+        ("2分", 120),
+        ("3分", 180),
+        ("5分", 300),
+        ("10分", 600)
+    ]
+
     init() {
-        let current = TimerManager.shared.settings
         if #available(macOS 13.0, *) {
             _launchAtLogin = State(initialValue: SMAppService.mainApp.status == .enabled)
-        } else {
-            _launchAtLogin = State(initialValue: false)
         }
-
-        _workMinutes = State(initialValue: String(current.workDurationMinutes))
-        _workSeconds = State(initialValue: String(current.workDurationSeconds))
-        _breakMinutes = State(initialValue: String(current.breakDurationMinutes))
-        _breakSeconds = State(initialValue: String(current.breakDurationSeconds))
-        _earlyNotifyMinutes = State(initialValue: String(current.earlyNotifyMinutes))
-        _earlyNotifySeconds = State(initialValue: String(current.earlyNotifySeconds))
     }
 
-    private var hasUnsavedTimeChanges: Bool {
-        let current = timerManager.settings
-        return workMinutes != String(current.workDurationMinutes)
-            || workSeconds != String(current.workDurationSeconds)
-            || breakMinutes != String(current.breakDurationMinutes)
-            || breakSeconds != String(current.breakDurationSeconds)
-            || earlyNotifyMinutes != String(current.earlyNotifyMinutes)
-            || earlyNotifySeconds != String(current.earlyNotifySeconds)
+    private var currentWorkMinutes: Int {
+        min(60, max(1, timerManager.settings.workDurationMinutes))
+    }
+
+    private var currentEarlyMinutes: Int {
+        timerManager.settings.earlyNotifyMinutes
+    }
+
+    private var currentBreakTotalSeconds: Int {
+        max(60, timerManager.settings.breakTotalSeconds)
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                basicSettingsSection
-                timeSettingsSection
-                smartDelaySection
+        VStack(spacing: 12) {
+            tabBar
+
+            ZStack(alignment: .top) {
+                switch activeTab {
+                case .clockAndRhythm:
+                    clockAndRhythmTab
+                        .transition(.opacity)
+                case .smartDelay:
+                    smartDelayTab
+                        .transition(.opacity)
+                case .appearanceAndGeneral:
+                    appearanceAndGeneralTab
+                        .transition(.opacity)
+                }
             }
-            .padding(24)
+            .frame(height: SettingsTokens.tabContentHeight, alignment: .top)
+            .clipped()
         }
-        .frame(width: 460, height: 640)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(width: SettingsTokens.windowWidth, height: SettingsTokens.windowHeight, alignment: .top)
         .onAppear {
             syncLaunchAtLoginStatus()
-            syncDraftFromSettings(timerManager.settings)
         }
-        .alert("设置错误", isPresented: $showAlert) {
+        .alert("设置提示", isPresented: $showAlert) {
             Button("确定", action: {})
                 .buttonStyle(.borderedProminent)
-                .tint(.blue)
         } message: {
             Text(alertMessage)
         }
     }
 
-    private var basicSettingsSection: some View {
-        VStack(spacing: 15) {
-            Text("基本设置")
-                .font(.headline)
-                .fontWeight(.semibold)
-                .foregroundColor(.primary)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.bottom, 5)
+    // MARK: - NexWan 风格固定 Tab 栏
 
-            VStack(spacing: 12) {
-                HStack {
-                    Text("开机自启动")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Toggle("", isOn: Binding(
-                        get: { launchAtLogin },
-                        set: { newValue in
-                            applyLaunchAtLogin(enabled: newValue)
+    private var tabBar: some View {
+        HStack(spacing: 2) {
+            ForEach(SettingsTab.allCases) { tab in
+                let selected = activeTab == tab
+                Button {
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        activeTab = tab
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: tab.iconName)
+                            .font(.system(size: 11, weight: selected ? .semibold : .regular))
+
+                        Text(tab.rawValue)
+                            .font(.system(size: 12, weight: selected ? .semibold : .medium))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                    .foregroundColor(selected ? Color(nsColor: .labelColor) : Color(nsColor: .secondaryLabelColor))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background {
+                        if selected {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(SettingsTokens.activeTabFill)
+                                .matchedGeometryEffect(id: "activeTabIndicator", in: tabSelectionNamespace)
                         }
-                    ))
-                    .toggleStyle(SwitchToggleStyle(tint: .blue))
+                    }
+                    .contentShape(Rectangle())
                 }
-
-                HStack {
-                    Text("显示跳过按钮")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Toggle("", isOn: $timerManager.settings.showSkipButton)
-                        .toggleStyle(SwitchToggleStyle(tint: .blue))
-                }
-
-                HStack {
-                    Text("显示程序坞图标")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Toggle("", isOn: $timerManager.settings.showDockIcon)
-                        .toggleStyle(SwitchToggleStyle(tint: .blue))
-                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 18)
-            .frame(maxWidth: .infinity)
-            .background(cardBackground)
         }
         .frame(maxWidth: .infinity)
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: SettingsTokens.cornerRadius, style: .continuous)
+                .fill(SettingsTokens.tabBarFill)
+        )
     }
 
-    private var timeSettingsSection: some View {
-        VStack(spacing: 15) {
-            Text("时间设置")
-                .font(.headline)
-                .fontWeight(.semibold)
-                .foregroundColor(.primary)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.bottom, 5)
+    // MARK: - Tab 1: 时间
 
-            VStack(spacing: 16) {
-                timeInputRow(title: "专注时长", minutes: $workMinutes, seconds: $workSeconds)
-                timeInputRow(title: "提前提醒", minutes: $earlyNotifyMinutes, seconds: $earlyNotifySeconds)
-                timeInputRow(title: "休息时长", minutes: $breakMinutes, seconds: $breakSeconds)
+    private var clockAndRhythmTab: some View {
+        VStack(spacing: 10) {
+            SettingsCardContainer {
+                VStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        ForEach(presets) { preset in
+                            let isSelected = currentWorkMinutes == preset.workMinutes
+                                && currentEarlyMinutes == preset.earlyMinutes
+                                && currentBreakTotalSeconds == preset.breakSeconds
 
-                if hasUnsavedTimeChanges {
-                    Text("有未应用的时间修改，点击“应用”生效")
-                        .font(.system(size: 11))
-                        .foregroundColor(.orange)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                }
-
-                HStack(spacing: 14) {
-                    Button(action: resetTimeSettings) {
-                        Text("重置")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.primary)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(Color(NSColor.controlBackgroundColor))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                    )
-                            )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-
-                    Button(action: applyTimeSettings) {
-                        Text("应用")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(hasUnsavedTimeChanges ? Color.blue : Color.blue.opacity(0.6))
-                                    .shadow(color: Color.blue.opacity(0.2), radius: 2, x: 0, y: 1)
-                            )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-                .padding(.top, 6)
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 18)
-            .frame(maxWidth: .infinity)
-            .background(cardBackground)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var smartDelaySection: some View {
-        VStack(spacing: 15) {
-            Text("智能延迟休息")
-                .font(.headline)
-                .fontWeight(.semibold)
-                .foregroundColor(.primary)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.bottom, 5)
-
-            VStack(spacing: 14) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("操作时延迟锁屏")
-                            .font(.system(size: 14, weight: .medium))
-                        Text("打字或操作鼠标时自动顺延，空闲后进入休息")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    Toggle("", isOn: $timerManager.settings.smartDelayEnabled)
-                        .toggleStyle(SwitchToggleStyle(tint: .blue))
-                }
-
-                if timerManager.settings.smartDelayEnabled {
-                    Divider()
-
-                    HStack {
-                        Text("监听键盘输入")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        Toggle("", isOn: $timerManager.settings.monitorKeyboard)
-                            .toggleStyle(SwitchToggleStyle(tint: .blue))
-                    }
-
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("监听鼠标操作")
-                            Text("含点击、滚轮与超过 15pt 的移动")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Toggle("", isOn: $timerManager.settings.monitorMouse)
-                            .toggleStyle(SwitchToggleStyle(tint: .blue))
-                    }
-
-                    if !timerManager.settings.monitorKeyboard && !timerManager.settings.monitorMouse {
-                        Text("当前未开启任何输入监听，到点将直接休息")
-                            .font(.system(size: 11))
-                            .foregroundColor(.orange)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    VStack(spacing: 8) {
-                        HStack {
-                            Text("空闲多久后休息")
-                                .font(.system(size: 13, weight: .medium))
-                            Spacer()
-                            Stepper(
-                                "\(timerManager.settings.idleDelaySeconds) 秒",
-                                value: $timerManager.settings.idleDelaySeconds,
-                                in: 3...120,
-                                step: 1
-                            )
-                            .monospacedDigit()
-                        }
-
-                        HStack(spacing: 8) {
-                            Text("快捷:")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                            ForEach([5, 10, 15, 30], id: \.self) { seconds in
-                                Button("\(seconds)秒") {
-                                    timerManager.settings.idleDelaySeconds = seconds
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                .font(.system(size: 11, weight: .medium))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(
-                                    Capsule().fill(
-                                        timerManager.settings.idleDelaySeconds == seconds
-                                            ? Color.blue.opacity(0.2)
-                                            : Color.gray.opacity(0.15)
-                                    )
-                                )
-                                .foregroundColor(
-                                    timerManager.settings.idleDelaySeconds == seconds ? .blue : .primary
+                            SettingsPillButton(
+                                title: preset.title,
+                                isSelected: isSelected
+                            ) {
+                                applyTime(
+                                    workMinutes: preset.workMinutes,
+                                    earlyMinutes: preset.earlyMinutes,
+                                    breakTotalSeconds: preset.breakSeconds
                                 )
                             }
-                            Spacer()
                         }
                     }
 
-                    HStack {
-                        Text("最长允许顺延")
-                            .font(.system(size: 13, weight: .medium))
-                        Spacer()
-                        Picker("", selection: $timerManager.settings.maxDelayMinutes) {
-                            Text("3 分钟").tag(3)
-                            Text("5 分钟").tag(5)
-                            Text("10 分钟").tag(10)
-                            Text("不限制").tag(0)
+                    FocusClockDialView(
+                        workMinutes: currentWorkMinutes,
+                        earlyNotifyMinutes: currentEarlyMinutes,
+                        onWorkMinutesChanged: { newWorkMin in
+                            let safeEarly = min(currentEarlyMinutes, max(0, newWorkMin - 1))
+                            applyTime(
+                                workMinutes: newWorkMin,
+                                earlyMinutes: safeEarly,
+                                breakTotalSeconds: currentBreakTotalSeconds
+                            )
                         }
-                        .pickerStyle(.menu)
-                        .frame(width: 110)
-                    }
-
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("休息前 3 秒轻提示")
-                            Text("顶部浮窗倒数，继续操作可立即推迟")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Toggle("", isOn: $timerManager.settings.showPreBreakCountdown)
-                            .toggleStyle(SwitchToggleStyle(tint: .blue))
-                    }
+                    )
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
-
-                Divider()
-
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("自然离开自动重置")
-                            .font(.system(size: 14, weight: .medium))
-                        Text("离开电脑满一个休息时长，回来自动开始新一轮专注")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    Toggle("", isOn: $timerManager.settings.autoResetOnIdle)
-                        .toggleStyle(SwitchToggleStyle(tint: .blue))
-                }
+                .padding(12)
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 18)
-            .frame(maxWidth: .infinity)
-            .background(cardBackground)
+
+            SettingsCardContainer {
+                HStack(spacing: 8) {
+                    Text("提前提醒")
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(width: 56, alignment: .leading)
+
+                    HStack(spacing: 4) {
+                        ForEach([0, 1, 2, 3, 5], id: \.self) { minutes in
+                            let isDisabled = minutes >= currentWorkMinutes && minutes > 0
+                            SettingsPillButton(
+                                title: minutes == 0 ? "关闭" : "\(minutes)分",
+                                isSelected: currentEarlyMinutes == minutes,
+                                isDisabled: isDisabled
+                            ) {
+                                applyTime(workMinutes: currentWorkMinutes, earlyMinutes: minutes, breakTotalSeconds: currentBreakTotalSeconds)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+
+                SettingsHairlineDivider()
+
+                HStack(spacing: 8) {
+                    Text("休息时长")
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(width: 56, alignment: .leading)
+
+                    HStack(spacing: 4) {
+                        ForEach(breakOptions, id: \.seconds) { item in
+                            SettingsPillButton(
+                                title: item.label,
+                                isSelected: currentBreakTotalSeconds == item.seconds
+                            ) {
+                                applyTime(workMinutes: currentWorkMinutes, earlyMinutes: currentEarlyMinutes, breakTotalSeconds: item.seconds)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+            }
         }
-        .frame(maxWidth: .infinity)
     }
 
-    private func timeInputRow(title: String, minutes: Binding<String>, seconds: Binding<String>) -> some View {
-        HStack {
+    // MARK: - Tab 2: 防打断（极简一行一配置）
+
+    private var smartDelayTab: some View {
+        VStack(spacing: 10) {
+            SettingsCardContainer {
+                settingsToggleRow(
+                    icon: "hand.raised",
+                    title: "活动顺延",
+                    isOn: $timerManager.settings.smartDelayEnabled
+                )
+
+                SettingsHairlineDivider()
+
+                HStack(spacing: 10) {
+                    Image(systemName: "keyboard")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Color.accentColor)
+                        .frame(width: 18)
+
+                    Text("监测输入")
+                        .font(.system(size: 12, weight: .medium))
+
+                    Spacer()
+
+                    HStack(spacing: 6) {
+                        SettingsPillButton(
+                            title: "键盘",
+                            isSelected: timerManager.settings.monitorKeyboard
+                        ) {
+                            if timerManager.settings.monitorKeyboard && !timerManager.settings.monitorMouse { return }
+                            timerManager.settings.monitorKeyboard.toggle()
+                        }
+                        .frame(width: 54)
+
+                        SettingsPillButton(
+                            title: "鼠标",
+                            isSelected: timerManager.settings.monitorMouse
+                        ) {
+                            if timerManager.settings.monitorMouse && !timerManager.settings.monitorKeyboard { return }
+                            timerManager.settings.monitorMouse.toggle()
+                        }
+                        .frame(width: 54)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .disabled(!timerManager.settings.smartDelayEnabled)
+                .opacity(timerManager.settings.smartDelayEnabled ? 1.0 : 0.45)
+
+                SettingsHairlineDivider()
+
+                HStack(spacing: 10) {
+                    Image(systemName: "hourglass")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Color.accentColor)
+                        .frame(width: 18)
+
+                    Text("空闲触发")
+                        .font(.system(size: 12, weight: .medium))
+
+                    Spacer()
+
+                    HStack(spacing: 6) {
+                        ForEach([(5, "5秒"), (10, "10秒"), (30, "30秒")], id: \.0) { seconds, label in
+                            SettingsPillButton(
+                                title: label,
+                                isSelected: timerManager.settings.idleDelaySeconds == seconds
+                            ) {
+                                timerManager.settings.idleDelaySeconds = seconds
+                            }
+                            .frame(width: 54)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .disabled(!timerManager.settings.smartDelayEnabled)
+                .opacity(timerManager.settings.smartDelayEnabled ? 1.0 : 0.45)
+
+                SettingsHairlineDivider()
+
+                HStack(spacing: 10) {
+                    Image(systemName: "clock.arrow.2.circlepath")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Color.accentColor)
+                        .frame(width: 18)
+
+                    Text("最长顺延")
+                        .font(.system(size: 12, weight: .medium))
+
+                    Spacer()
+
+                    HStack(spacing: 6) {
+                        ForEach([(3, "3分"), (5, "5分"), (10, "10分")], id: \.0) { value, title in
+                            SettingsPillButton(
+                                title: title,
+                                isSelected: timerManager.settings.maxDelayMinutes == value
+                            ) {
+                                timerManager.settings.maxDelayMinutes = value
+                            }
+                            .frame(width: 54)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .disabled(!timerManager.settings.smartDelayEnabled)
+                .opacity(timerManager.settings.smartDelayEnabled ? 1.0 : 0.45)
+            }
+
+            SettingsCardContainer {
+                settingsToggleRow(
+                    icon: "pause.circle",
+                    title: "休息时暂停媒体",
+                    isOn: $timerManager.settings.pauseMediaOnBreak
+                )
+            }
+        }
+    }
+
+    // MARK: - Tab 3: 通用
+
+    private var appearanceAndGeneralTab: some View {
+        VStack(spacing: 10) {
+            SettingsCardContainer {
+                settingsToggleRow(
+                    icon: "power",
+                    title: "开机自启动",
+                    isOn: Binding(
+                        get: { launchAtLogin },
+                        set: { applyLaunchAtLogin(enabled: $0) }
+                    )
+                )
+
+                SettingsHairlineDivider()
+
+                settingsToggleRow(
+                    icon: "dock.rectangle",
+                    title: "显示程序坞图标",
+                    isOn: $timerManager.settings.showDockIcon
+                )
+
+                SettingsHairlineDivider()
+
+                settingsToggleRow(
+                    icon: "forward.end",
+                    title: "显示跳过按钮",
+                    isOn: $timerManager.settings.showSkipButton
+                )
+
+                SettingsHairlineDivider()
+
+                settingsToggleRow(
+                    icon: "figure.cooldown",
+                    title: "休息拉伸引导",
+                    isOn: $timerManager.settings.enableBreakExerciseGuide
+                )
+            }
+
+            SettingsCardContainer {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "swatchpalette")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Color.accentColor)
+                            .frame(width: 18)
+
+                        Text("主题预览")
+                            .font(.system(size: 12, weight: .medium))
+
+                        Text("点击卡片即刻预览")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(nsColor: .secondaryLabelColor))
+
+                        Spacer()
+
+                        SettingsPillButton(
+                            title: BreakGradientTheme.autoDayNight.displayName,
+                            isSelected: timerManager.settings.breakGradientTheme == .autoDayNight
+                        ) {
+                            timerManager.settings.breakGradientTheme = .autoDayNight
+                        }
+                        .frame(width: 68)
+                    }
+
+                    // 3 列 × 2 行矩形可视化主题预览矩阵（第 1 行：3 款柔和护眼主题；第 2 行：3 款深邃极光主题）
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
+                        spacing: 8
+                    ) {
+                        ForEach(BreakGradientTheme.concreteThemes, id: \.self) { theme in
+                            BreakThemePreviewCardView(
+                                theme: theme,
+                                isSelected: timerManager.settings.breakGradientTheme == theme
+                            ) {
+                                timerManager.settings.breakGradientTheme = theme
+                                timerManager.startBreakPreview()
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+            }
+        }
+    }
+
+    // MARK: - NexWan 极简设置行
+
+    private func settingsToggleRow(
+        icon: String,
+        title: String,
+        isOn: Binding<Bool>
+    ) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Color.accentColor)
+                .frame(width: 18)
+
             Text(title)
-                .frame(width: 80, alignment: .leading)
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Color(nsColor: .labelColor))
 
             Spacer()
 
-            HStack(spacing: 8) {
-                CustomTextField(text: minutes, onEditingChanged: { _ in })
-                    .frame(width: 45)
-                Text("分")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-                CustomTextField(text: seconds, onEditingChanged: { _ in })
-                    .frame(width: 45)
-                Text("秒")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-            }
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(Color(NSColor.controlBackgroundColor))
-            .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+    private func applyTime(workMinutes: Int, earlyMinutes: Int, breakTotalSeconds: Int) {
+        let clampedWork = min(60, max(1, workMinutes))
+        let safeEarly = min(earlyMinutes, max(0, clampedWork - 1))
+        _ = timerManager.updateTimeSettings(
+            workMinutes: clampedWork,
+            workSeconds: 0,
+            breakMinutes: breakTotalSeconds / 60,
+            breakSeconds: breakTotalSeconds % 60,
+            earlyMinutes: safeEarly,
+            earlySeconds: 0
+        )
     }
 
     private func syncLaunchAtLoginStatus() {
         if #available(macOS 13.0, *) {
             launchAtLogin = SMAppService.mainApp.status == .enabled
         }
-    }
-
-    private func syncDraftFromSettings(_ settings: TimerSettings) {
-        workMinutes = String(settings.workDurationMinutes)
-        workSeconds = String(settings.workDurationSeconds)
-        breakMinutes = String(settings.breakDurationMinutes)
-        breakSeconds = String(settings.breakDurationSeconds)
-        earlyNotifyMinutes = String(settings.earlyNotifyMinutes)
-        earlyNotifySeconds = String(settings.earlyNotifySeconds)
     }
 
     private func applyLaunchAtLogin(enabled: Bool) {
@@ -376,95 +495,6 @@ struct SettingsView: View {
             let success = SMLoginItemSetEnabled("fxzer.top.RestTimer" as CFString, enabled)
             if success {
                 launchAtLogin = enabled
-            }
-        }
-    }
-
-    private func applyTimeSettings() {
-        guard let workMin = Int(workMinutes),
-              let workSec = Int(workSeconds),
-              let breakMin = Int(breakMinutes),
-              let breakSec = Int(breakSeconds),
-              let earlyMin = Int(earlyNotifyMinutes),
-              let earlySec = Int(earlyNotifySeconds) else {
-            alertMessage = TimeSettingsValidationError.invalidInput.localizedDescription
-            showAlert = true
-            return
-        }
-
-        let result = timerManager.updateTimeSettings(
-            workMinutes: workMin,
-            workSeconds: workSec,
-            breakMinutes: breakMin,
-            breakSeconds: breakSec,
-            earlyMinutes: earlyMin,
-            earlySeconds: earlySec
-        )
-
-        if case .failure(let error) = result {
-            alertMessage = error.localizedDescription
-            showAlert = true
-        }
-    }
-
-    private func resetTimeSettings() {
-        let defaults = TimerSettings.default
-        workMinutes = String(defaults.workDurationMinutes)
-        workSeconds = String(defaults.workDurationSeconds)
-        breakMinutes = String(defaults.breakDurationMinutes)
-        breakSeconds = String(defaults.breakDurationSeconds)
-        earlyNotifyMinutes = String(defaults.earlyNotifyMinutes)
-        earlyNotifySeconds = String(defaults.earlyNotifySeconds)
-    }
-}
-
-struct CustomTextField: NSViewRepresentable {
-    @Binding var text: String
-    var onEditingChanged: (String) -> Void
-
-    func makeNSView(context: Context) -> NSTextField {
-        let textField = NSTextField()
-        textField.delegate = context.coordinator
-        textField.alignment = .right
-        textField.bezelStyle = .roundedBezel
-        textField.font = .systemFont(ofSize: NSFont.systemFontSize)
-        textField.controlSize = .regular
-        return textField
-    }
-
-    func updateNSView(_ nsView: NSTextField, context: Context) {
-        if nsView.stringValue != text {
-            nsView.stringValue = text
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    final class Coordinator: NSObject, NSTextFieldDelegate {
-        var parent: CustomTextField
-
-        init(_ parent: CustomTextField) {
-            self.parent = parent
-        }
-
-        func controlTextDidChange(_ obj: Notification) {
-            guard let textField = obj.object as? NSTextField else { return }
-            let filtered = textField.stringValue.filter { "0123456789".contains($0) }
-            let truncated = String(filtered.prefix(2))
-
-            if truncated != textField.stringValue {
-                textField.stringValue = truncated
-            }
-
-            parent.text = truncated
-            parent.onEditingChanged(truncated)
-        }
-
-        func controlTextDidBeginEditing(_ obj: Notification) {
-            if let textField = obj.object as? NSTextField {
-                textField.currentEditor()?.selectAll(nil)
             }
         }
     }
