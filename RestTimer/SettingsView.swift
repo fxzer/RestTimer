@@ -408,10 +408,10 @@ struct SettingsView: View {
                         .frame(width: 68)
                     }
 
-                    // 3 列 × 2 行矩形可视化主题预览矩阵（第 1 行：3 款柔和护眼主题；第 2 行：3 款深邃极光主题）
+                    // 3 列 × 3 行矩形可视化主题预览矩阵（极淡静音系 -> 柔和护眼系 -> 静谧深色系）
                     LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
-                        spacing: 8
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 3),
+                        spacing: 7
                     ) {
                         ForEach(BreakGradientTheme.concreteThemes, id: \.self) { theme in
                             BreakThemePreviewCardView(

@@ -1,8 +1,11 @@
 import Foundation
 
-/// 休息全屏极光渐变主题（含 3 款低对比柔和护眼主题 + 3 款深邃沉浸主题）
+/// 休息全屏主题（3×3 共 9 款：3 款极淡静音系 + 3 款柔和护眼系 + 3 款静谧深色系）
 enum BreakGradientTheme: String, Codable, CaseIterable, Equatable {
     case autoDayNight
+    case frostedGlass
+    case graphiteMist
+    case warmIvory
     case celadonEyeCare
     case warmPaper
     case mistyTeal
@@ -12,6 +15,7 @@ enum BreakGradientTheme: String, Codable, CaseIterable, Equatable {
 
     /// 全部具象可选主题（不含自动轮换）
     static let concreteThemes: [BreakGradientTheme] = [
+        .frostedGlass, .graphiteMist, .warmIvory,
         .celadonEyeCare, .warmPaper, .mistyTeal,
         .forestMoss, .auroraOcean, .sunsetAmber
     ]
@@ -19,6 +23,9 @@ enum BreakGradientTheme: String, Codable, CaseIterable, Equatable {
     var displayName: String {
         switch self {
         case .autoDayNight: return "自动轮换"
+        case .frostedGlass: return "毛玻璃"
+        case .graphiteMist: return "石墨灰"
+        case .warmIvory: return "素宣白"
         case .celadonEyeCare: return "豆沙绿"
         case .warmPaper: return "暖羊皮"
         case .mistyTeal: return "晨雾蓝"
@@ -28,13 +35,16 @@ enum BreakGradientTheme: String, Codable, CaseIterable, Equatable {
         }
     }
 
-    var isEyeCareSoft: Bool {
-        switch self {
-        case .celadonEyeCare, .warmPaper, .mistyTeal:
-            return true
-        default:
-            return false
-        }
+    var isLightTheme: Bool {
+        self == .warmIvory
+    }
+
+    var isFrostedDesktop: Bool {
+        self == .frostedGlass
+    }
+
+    var isStaticMinimal: Bool {
+        self == .frostedGlass || self == .warmIvory
     }
 }
 
