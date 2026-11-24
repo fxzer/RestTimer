@@ -7,7 +7,16 @@ internal final class TimerManager: ObservableObject {
 
     private static let settingsKey = "TimerSettings"
 
+    private enum PreviewRestoreTarget {
+        case idle
+        case working(remaining: TimeInterval)
+        case pendingBreak(overdue: TimeInterval)
+        case away
+        case paused(snapshot: PauseSnapshot, reason: PauseReason)
+    }
+
     @Published private(set) var state: SessionState = .idle
+    @Published private(set) var isBreakPreview: Bool = false
     @Published var settings: TimerSettings {
         didSet {
             handleSettingsDidChange(from: oldValue)
@@ -25,13 +34,14 @@ internal final class TimerManager: ObservableObject {
     private var activityCheckTimer: Timer?
     private var startupWorkItem: DispatchWorkItem?
     private var dockPolicyWorkItem: DispatchWorkItem?
+    private var previewRestoreTarget: PreviewRestoreTarget?
     private var isAdjustingSettings = false
 
     // MARK: - 派生属性（全部源自单一状态机与配置，杜绝镜像失步）
 
     var isPaused: Bool { state.isPaused }
     var isBreakTime: Bool { state.isBreaking }
-    var preventQuit: Bool { state.preventQuit }
+    var preventQuit: Bool { !isBreakPreview && state.preventQuit }
     var remainingBreakTime: TimeInterval { state.remainingBreakTime }
     var pendingOverdueSeconds: TimeInterval { state.pendingOverdueSeconds }
 
@@ -95,16 +105,78 @@ internal final class TimerManager: ObservableObject {
 
     func skipBreak() {
         runOnMain {
+            if self.isBreakPreview {
+                self.endBreakPreview()
+                return
+            }
             self.transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: true)
         }
     }
 
+    /// 正式立即进入休息（如菜单栏点击「休息」）：触发媒体自动暂停，遵循「显示跳过按钮」设置
     func startBreakImmediately() {
         runOnMain {
+            if self.isBreakPreview {
+                self.isBreakPreview = false
+                self.previewRestoreTarget = nil
+            }
             guard !self.state.isBreaking else { return }
             self.startupWorkItem?.cancel()
             self.startupWorkItem = nil
             self.transition(to: .breaking(remaining: self.breakDuration))
+        }
+    }
+
+    /// 主题预览模式：不暂停媒体，退出预览后无损恢复预览前的专注剩余时间
+    func startBreakPreview() {
+        runOnMain {
+            guard !self.state.isBreaking else { return }
+            let now = Date().timeIntervalSince1970
+            switch self.state {
+            case .idle:
+                self.previewRestoreTarget = .idle
+            case .working(let startedAt):
+                let remaining = max(1.0, self.workDuration - (now - startedAt))
+                self.previewRestoreTarget = .working(remaining: remaining)
+            case .pendingBreak(let startedAt, _):
+                self.previewRestoreTarget = .pendingBreak(overdue: max(0, now - startedAt))
+            case .away:
+                self.previewRestoreTarget = .away
+            case .paused(let snapshot, let reason):
+                self.previewRestoreTarget = .paused(snapshot: snapshot, reason: reason)
+            case .breaking:
+                return
+            }
+            self.startupWorkItem?.cancel()
+            self.startupWorkItem = nil
+            self.isBreakPreview = true
+            self.transition(to: .breaking(remaining: self.breakDuration))
+        }
+    }
+
+    /// 退出主题预览并无损恢复原有专注进度
+    func endBreakPreview() {
+        runOnMain {
+            guard self.isBreakPreview else { return }
+            let restoreTarget = self.previewRestoreTarget ?? .idle
+            self.isBreakPreview = false
+            self.previewRestoreTarget = nil
+
+            let now = Date().timeIntervalSince1970
+            switch restoreTarget {
+            case .idle:
+                self.transition(to: .idle)
+            case .working(let remaining):
+                let adjustedStart = now - (self.workDuration - remaining)
+                self.transition(to: .working(startedAt: adjustedStart), notifyWorkStart: false)
+            case .pendingBreak(let overdue):
+                let adjustedStart = now - max(0, overdue)
+                self.transition(to: .pendingBreak(startedAt: adjustedStart, overdue: max(0, overdue)))
+            case .away:
+                self.transition(to: .away)
+            case .paused(let snapshot, let reason):
+                self.transition(to: .paused(snapshot: snapshot, reason: reason))
+            }
         }
     }
 
@@ -120,6 +192,9 @@ internal final class TimerManager: ObservableObject {
 
     func pause(reason: PauseReason) {
         runOnMain {
+            if self.isBreakPreview {
+                self.endBreakPreview()
+            }
             self.startupWorkItem?.cancel()
             self.startupWorkItem = nil
 
@@ -199,6 +274,8 @@ internal final class TimerManager: ObservableObject {
 
     func resetTimer() {
         runOnMain {
+            self.isBreakPreview = false
+            self.previewRestoreTarget = nil
             self.startupWorkItem?.cancel()
             self.startupWorkItem = nil
             self.transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: true)
@@ -253,7 +330,7 @@ internal final class TimerManager: ObservableObject {
 
     private func transition(to newState: SessionState, notifyWorkStart: Bool = false) {
         assert(Thread.isMainThread, "SessionState transitions must happen on main thread")
-
+        let wasBreaking = state.isBreaking
         invalidateAllTimers()
         state = newState
 
@@ -274,22 +351,18 @@ internal final class TimerManager: ObservableObject {
                 handleWorkTimerExpired()
                 return
             }
-
             if notifyWorkStart {
                 toastOverlay.show(.workStarted)
             }
-
             if earlyNotifyDuration > 0 && remaining > earlyNotifyDuration {
                 let delay = remaining - earlyNotifyDuration
                 earlyNotifyTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
                     self?.showEarlyNotification()
                 }
             }
-
             workTimer = Timer.scheduledTimer(withTimeInterval: remaining, repeats: false) { [weak self] _ in
                 self?.handleWorkTimerExpired()
             }
-
             startActivityCheckTimer(interval: 1.0)
 
         case .pendingBreak:
@@ -301,8 +374,10 @@ internal final class TimerManager: ObservableObject {
         case .breaking:
             preBreakHud.hide()
             toastOverlay.dismissImmediately()
+            if !wasBreaking && !isBreakPreview && settings.pauseMediaOnBreak {
+                MediaPlaybackPauser.pauseActiveMediaIfNeeded()
+            }
             breakWindowManager.show(timerManager: self)
-
             breakTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
                 guard let self = self else {
                     timer.invalidate()
@@ -334,7 +409,13 @@ internal final class TimerManager: ObservableObject {
 
         if remaining > 1 {
             state = .breaking(remaining: remaining - 1)
+        } else if isBreakPreview {
+            endBreakPreview()
         } else {
+            // 休息自然结束时播放一声轻柔系统提示音，方便闭眼拉伸或离座时知晓
+            if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+                NSSound(named: NSSound.Name("Glass"))?.play()
+            }
             transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: true)
         }
     }
@@ -436,7 +517,7 @@ internal final class TimerManager: ObservableObject {
         guard !isAdjustingSettings else { return }
 
         let clampedIdle = min(max(settings.idleDelaySeconds, 3), 120)
-        let clampedMaxDelay = max(0, settings.maxDelayMinutes)
+        let clampedMaxDelay = settings.maxDelayMinutes <= 0 ? 5 : min(settings.maxDelayMinutes, 10)
         if clampedIdle != settings.idleDelaySeconds || clampedMaxDelay != settings.maxDelayMinutes {
             isAdjustingSettings = true
             settings.idleDelaySeconds = clampedIdle

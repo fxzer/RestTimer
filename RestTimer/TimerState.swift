@@ -130,6 +130,7 @@ struct ScreenPresenceTracker: Equatable {
 enum TimeSettingsValidationError: LocalizedError, Equatable {
     case invalidInput
     case workDurationMustBePositive
+    case workDurationExceedsOneHour
     case breakDurationMustBePositive
     case earlyNotifyMustBeLessThanWork
 
@@ -139,6 +140,8 @@ enum TimeSettingsValidationError: LocalizedError, Equatable {
             return "请输入有效的时间值"
         case .workDurationMustBePositive:
             return "专注时长必须大于 0 秒"
+        case .workDurationExceedsOneHour:
+            return "为避免久坐危害，单次专注时长最长不超过 60 分钟"
         case .breakDurationMustBePositive:
             return "休息时长必须大于 0 秒"
         case .earlyNotifyMustBeLessThanWork:
@@ -149,6 +152,8 @@ enum TimeSettingsValidationError: LocalizedError, Equatable {
 
 /// 持久化配置模型（兼容历史版本的缺省字段解码）
 struct TimerSettings: Codable, Equatable {
+    static let maxWorkDurationSeconds = 60 * 60
+
     var showSkipButton: Bool
     var showDockIcon: Bool
     var workDurationMinutes: Int
@@ -164,11 +169,14 @@ struct TimerSettings: Codable, Equatable {
     var maxDelayMinutes: Int = 5
     var showPreBreakCountdown: Bool = true
     var autoResetOnIdle: Bool = true
+    var pauseMediaOnBreak: Bool = true
+    var enableBreakExerciseGuide: Bool = true
+    var breakGradientTheme: BreakGradientTheme = .autoDayNight
 
     static let `default` = TimerSettings(
         showSkipButton: false,
         showDockIcon: true,
-        workDurationMinutes: 25,
+        workDurationMinutes: 45,
         workDurationSeconds: 0,
         breakDurationMinutes: 5,
         breakDurationSeconds: 0,
@@ -180,7 +188,10 @@ struct TimerSettings: Codable, Equatable {
         idleDelaySeconds: 10,
         maxDelayMinutes: 5,
         showPreBreakCountdown: true,
-        autoResetOnIdle: true
+        autoResetOnIdle: true,
+        pauseMediaOnBreak: true,
+        enableBreakExerciseGuide: true,
+        breakGradientTheme: .autoDayNight
     )
 
     init(
@@ -198,7 +209,10 @@ struct TimerSettings: Codable, Equatable {
         idleDelaySeconds: Int = 10,
         maxDelayMinutes: Int = 5,
         showPreBreakCountdown: Bool = true,
-        autoResetOnIdle: Bool = true
+        autoResetOnIdle: Bool = true,
+        pauseMediaOnBreak: Bool = true,
+        enableBreakExerciseGuide: Bool = true,
+        breakGradientTheme: BreakGradientTheme = .autoDayNight
     ) {
         self.showSkipButton = showSkipButton
         self.showDockIcon = showDockIcon
@@ -215,6 +229,9 @@ struct TimerSettings: Codable, Equatable {
         self.maxDelayMinutes = maxDelayMinutes
         self.showPreBreakCountdown = showPreBreakCountdown
         self.autoResetOnIdle = autoResetOnIdle
+        self.pauseMediaOnBreak = pauseMediaOnBreak
+        self.enableBreakExerciseGuide = enableBreakExerciseGuide
+        self.breakGradientTheme = breakGradientTheme
     }
 
     init(from decoder: Decoder) throws {
@@ -235,6 +252,9 @@ struct TimerSettings: Codable, Equatable {
         maxDelayMinutes = try container.decodeIfPresent(Int.self, forKey: .maxDelayMinutes) ?? fallback.maxDelayMinutes
         showPreBreakCountdown = try container.decodeIfPresent(Bool.self, forKey: .showPreBreakCountdown) ?? fallback.showPreBreakCountdown
         autoResetOnIdle = try container.decodeIfPresent(Bool.self, forKey: .autoResetOnIdle) ?? fallback.autoResetOnIdle
+        pauseMediaOnBreak = try container.decodeIfPresent(Bool.self, forKey: .pauseMediaOnBreak) ?? fallback.pauseMediaOnBreak
+        enableBreakExerciseGuide = try container.decodeIfPresent(Bool.self, forKey: .enableBreakExerciseGuide) ?? fallback.enableBreakExerciseGuide
+        breakGradientTheme = try container.decodeIfPresent(BreakGradientTheme.self, forKey: .breakGradientTheme) ?? fallback.breakGradientTheme
     }
 
     var workTotalSeconds: Int {
@@ -269,6 +289,9 @@ struct TimerSettings: Codable, Equatable {
 
         guard workTotal > 0 else {
             return .failure(.workDurationMustBePositive)
+        }
+        guard workTotal <= maxWorkDurationSeconds else {
+            return .failure(.workDurationExceedsOneHour)
         }
         guard breakTotal > 0 else {
             return .failure(.breakDurationMustBePositive)

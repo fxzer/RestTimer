@@ -231,3 +231,129 @@ enum BreakDelayEvaluator {
         idleElapsed < 2.0
     }
 }
+
+import CoreAudio
+
+/// 系统级媒体自动暂停器：结合 CoreAudio 活跃音频进程检测 + MediaRemote kMRPause + 硬件媒体键兜底，
+/// 确保仅在真有音乐/浏览器视频/播客正在出声时安全暂停，绝不在静默时误唤醒播放器。
+enum MediaPlaybackPauser {
+    private typealias MRMediaRemoteSendCommandFn = @convention(c) (UInt32, AnyObject?) -> Bool
+    private static let kMRPauseCommand: UInt32 = 1
+    private static let nxKeyTypePlay: Int = 16
+
+    /// 进入休息时调用：若当前有正在出声的媒体应用，自动将其暂停
+    static func pauseActiveMediaIfNeeded() {
+        // 单元测试环境下不触发系统媒体控制
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else {
+            return
+        }
+
+        let wasPlayingAudio = isAnyUserMediaOutputtingAudio()
+
+        // 1. 优先发送显式 kMRPause (1) 指令（即使当前无播放也是安全空操作，绝不会反向触发播放）
+        _ = sendMediaRemotePauseCommand()
+
+        // 2. 若入场时检测到有应用正在出声，120ms 后复查 CoreAudio 输出流；
+        //    若仍在出声（例如 macOS 15.4+/26+ 限制了非系统签名的 MediaRemote 或目标播放器仅响应硬件媒体键），
+        //    则在确认“正在出声”的前提下发送一次硬件媒体暂停键（NX_KEYTYPE_PLAY），精准暂停浏览器视频/音乐/播客。
+        guard wasPlayingAudio else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            if isAnyUserMediaOutputtingAudio() {
+                postHardwareMediaPlayPauseKey()
+            }
+        }
+    }
+
+    /// 通过 CoreAudio `kAudioHardwarePropertyProcessObjectList` + `kAudioProcessPropertyIsRunningOutput`
+    /// 精确检查当前是否存在正在向声卡/耳机输出音频的用户级应用（排除系统驱动与输入法语音助手）
+    static func isAnyUserMediaOutputtingAudio() -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyProcessObjectList,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var dataSize: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &dataSize) == noErr,
+              dataSize > 0 else {
+            return false
+        }
+
+        let count = Int(dataSize) / MemoryLayout<AudioObjectID>.size
+        var processIDs = [AudioObjectID](repeating: 0, count: count)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &dataSize, &processIDs) == noErr else {
+            return false
+        }
+
+        let selfBundle = Bundle.main.bundleIdentifier?.lowercased() ?? "fxzer.top.resttimer"
+
+        for objID in processIDs {
+            var isOut: UInt32 = 0
+            var outSize = UInt32(MemoryLayout<UInt32>.size)
+            var outAddr = AudioObjectPropertyAddress(
+                mSelector: kAudioProcessPropertyIsRunningOutput,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            guard AudioObjectGetPropertyData(objID, &outAddr, 0, nil, &outSize, &isOut) == noErr,
+                  isOut != 0 else {
+                continue
+            }
+
+            var unmanagedBundle: Unmanaged<CFString>?
+            var bSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+            var bAddr = AudioObjectPropertyAddress(
+                mSelector: kAudioProcessPropertyBundleID,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            let status = withUnsafeMutablePointer(to: &unmanagedBundle) { ptr in
+                AudioObjectGetPropertyData(objID, &bAddr, 0, nil, &bSize, ptr)
+            }
+            let bundleID = (status == noErr ? unmanagedBundle?.takeUnretainedValue() as String? : nil) ?? ""
+            let lower = bundleID.lowercased()
+
+            // 过滤系统底层音频驱动、语音识别及输入法语音进程
+            if lower == selfBundle
+                || lower.hasPrefix("com.apple.audio.")
+                || lower == "com.apple.coreaudiod"
+                || lower.hasPrefix("com.apple.speech")
+                || lower.hasPrefix("com.apple.siri")
+                || lower.hasPrefix("com.apple.accessibility.")
+                || lower.contains("ime")
+                || lower.contains("inputmethod") {
+                continue
+            }
+            return true
+        }
+        return false
+    }
+
+    private static func sendMediaRemotePauseCommand() -> Bool {
+        guard let handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_LAZY),
+              let sym = dlsym(handle, "MRMediaRemoteSendCommand") else {
+            return false
+        }
+        let fn = unsafeBitCast(sym, to: MRMediaRemoteSendCommandFn.self)
+        return fn(kMRPauseCommand, nil)
+    }
+
+    private static func postHardwareMediaPlayPauseKey() {
+        for isKeyDown in [true, false] {
+            let keyState = isKeyDown ? 0x0A : 0x0B
+            let data1 = (nxKeyTypePlay << 16) | (keyState << 8)
+            let event = NSEvent.otherEvent(
+                with: .systemDefined,
+                location: .zero,
+                modifierFlags: NSEvent.ModifierFlags(rawValue: isKeyDown ? 0xA00 : 0xB00),
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: 0,
+                context: nil,
+                subtype: 8,
+                data1: data1,
+                data2: -1
+            )
+            event?.cgEvent?.post(tap: .cghidEventTap)
+        }
+    }
+}
