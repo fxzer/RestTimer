@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import SwiftUI
 
 final class PreBreakHudViewModel: ObservableObject {
@@ -11,27 +12,31 @@ private struct PreBreakHudView: View {
     @ObservedObject var viewModel: PreBreakHudViewModel
 
     var body: some View {
-        HStack(spacing: 9) {
-            Image(systemName: viewModel.isWarningCap ? "exclamationmark.circle.fill" : "cup.and.saucer.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(viewModel.isWarningCap ? .orange : Color.accentColor)
+        let accent: Color = viewModel.isWarningCap ? .orange : Color.accentColor
+        HStack(spacing: 10) {
+            CapsuleAccentIconBadge(
+                systemName: viewModel.isWarningCap ? "exclamationmark" : "cup.and.saucer.fill",
+                accent: accent,
+                isPulsing: true
+            )
 
             Text(viewModel.title)
-                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .font(.system(size: 15.5, weight: .semibold, design: .rounded))
                 .foregroundColor(Color(nsColor: .labelColor))
                 .monospacedDigit()
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 12)
-        .background(FrostedGlassCapsuleBackground())
-        .padding(.horizontal, 16)
+        .padding(.leading, 9)
+        .padding(.trailing, 20)
+        .padding(.vertical, 8)
+        .background(FrostedGlassCapsuleBackground(accent: accent))
+        .padding(.horizontal, 18)
         .padding(.top, 10)
-        .padding(.bottom, 16)
+        .padding(.bottom, 18)
         .fixedSize()
     }
 }
 
-/// 休息前轻提示浮窗管理器：显式 HudState 状态机 + 监听屏幕变更，不抢焦点、不拦截输入
+/// 休息前轻提示浮窗管理器：弹性滑落入场 + 脉冲圆标倒数 + 退场向上收回，不抢焦点、不拦截输入
 final class PreBreakHudManager {
     private enum HudState {
         case hidden
@@ -41,6 +46,7 @@ final class PreBreakHudManager {
     private let viewModel = PreBreakHudViewModel()
     private var state: HudState = .hidden
     private var screenObserver: NSObjectProtocol?
+    private let slideOffsetY: CGFloat = 16
 
     init() {
         screenObserver = NotificationCenter.default.addObserver(
@@ -70,13 +76,13 @@ final class PreBreakHudManager {
 
         switch state {
         case .hidden:
-            let panels = createPanels()
+            let panels = createPanels(animated: true)
             state = .visible(panels: panels, reason: reason, secondsLeft: secondsLeft)
 
         case .visible(let panels, _, _):
             if panels.count != NSScreen.screens.count {
                 panels.forEach { $0.close() }
-                let rebuilt = createPanels()
+                let rebuilt = createPanels(animated: false)
                 state = .visible(panels: rebuilt, reason: reason, secondsLeft: secondsLeft)
             } else {
                 layout(panels: panels)
@@ -94,14 +100,28 @@ final class PreBreakHudManager {
         }
 
         guard case .visible(let panels, _, _) = state else { return }
-        panels.forEach { $0.close() }
         state = .hidden
+
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.20
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            for panel in panels {
+                var exitFrame = panel.frame
+                exitFrame.origin.y += 10
+                panel.animator().setFrame(exitFrame, display: true)
+                panel.animator().alphaValue = 0.0
+            }
+        }, completionHandler: {
+            DispatchQueue.main.async {
+                panels.forEach { $0.close() }
+            }
+        })
     }
 
     private func handleScreenParametersChanged() {
         guard case .visible(let panels, let reason, let secondsLeft) = state else { return }
         panels.forEach { $0.close() }
-        let rebuilt = createPanels()
+        let rebuilt = createPanels(animated: false)
         state = .visible(panels: rebuilt, reason: reason, secondsLeft: secondsLeft)
     }
 
@@ -118,17 +138,22 @@ final class PreBreakHudManager {
         }
     }
 
-    private func createPanels() -> [NSPanel] {
-        var result: [NSPanel] = []
+    private func createPanels(animated: Bool) -> [NSPanel] {
+        var entries: [(panel: NSPanel, targetFrame: NSRect)] = []
 
         for screen in NSScreen.screens {
             let hostingController = NSHostingController(rootView: PreBreakHudView(viewModel: viewModel))
             hostingController.view.wantsLayer = true
             let fittingSize = hostingController.view.fittingSize
-            let size = NSSize(width: max(150, ceil(fittingSize.width)), height: max(44, ceil(fittingSize.height)))
+            let size = NSSize(width: max(156, ceil(fittingSize.width)), height: max(56, ceil(fittingSize.height)))
+
+            let targetFrame = computeFrame(on: screen, size: size)
+            let startFrame = animated
+                ? NSRect(origin: NSPoint(x: targetFrame.origin.x, y: targetFrame.origin.y + slideOffsetY), size: size)
+                : targetFrame
 
             let panel = NSPanel(
-                contentRect: NSRect(origin: .zero, size: size),
+                contentRect: startFrame,
                 styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false
@@ -140,19 +165,25 @@ final class PreBreakHudManager {
             panel.level = .statusBar
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.ignoresMouseEvents = true
-            panel.alphaValue = 0.0
-
-            position(panel: panel, on: screen, size: size)
+            panel.alphaValue = animated ? 0.0 : 1.0
+            panel.setFrame(startFrame, display: true)
             panel.orderFront(nil)
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.20
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                panel.animator().alphaValue = 1.0
-            }
-            result.append(panel)
+
+            entries.append((panel, targetFrame))
         }
 
-        return result
+        if animated {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.34
+                context.timingFunction = CAMediaTimingFunction(controlPoints: 0.16, 1.16, 0.32, 1.0)
+                for entry in entries {
+                    entry.panel.animator().setFrame(entry.targetFrame, display: true)
+                    entry.panel.animator().alphaValue = 1.0
+                }
+            }
+        }
+
+        return entries.map(\.panel)
     }
 
     private func layout(panels: [NSPanel]) {
@@ -161,16 +192,16 @@ final class PreBreakHudManager {
             if let contentView = panel.contentViewController?.view {
                 contentView.layoutSubtreeIfNeeded()
                 let fittingSize = contentView.fittingSize
-                let size = NSSize(width: max(150, ceil(fittingSize.width)), height: max(44, ceil(fittingSize.height)))
-                position(panel: panel, on: screen, size: size)
+                let size = NSSize(width: max(156, ceil(fittingSize.width)), height: max(56, ceil(fittingSize.height)))
+                panel.setFrame(computeFrame(on: screen, size: size), display: true)
             }
         }
     }
 
-    private func position(panel: NSPanel, on screen: NSScreen, size: NSSize) {
+    private func computeFrame(on screen: NSScreen, size: NSSize) -> NSRect {
         let visibleFrame = screen.visibleFrame
         let originX = visibleFrame.midX - size.width / 2
-        let originY = visibleFrame.maxY - size.height - 10
-        panel.setFrame(NSRect(origin: NSPoint(x: originX, y: originY), size: size), display: true)
+        let originY = visibleFrame.maxY - size.height - 8
+        return NSRect(origin: NSPoint(x: originX, y: originY), size: size)
     }
 }
