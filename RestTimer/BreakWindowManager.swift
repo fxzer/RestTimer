@@ -1,6 +1,17 @@
 import AppKit
 import SwiftUI
 
+/// 支持成为 Key Window 的无边框全屏休息窗口（解决无边框 NSWindow 默认无法响应首击与快捷键的问题）
+private final class BreakOverlayWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
+/// 始终响应首次点击的 SwiftUI HostingView，避免多屏或切换焦点时需要点击两次
+private final class FirstClickHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 /// 全屏休息遮罩窗口显式状态管理器
 final class BreakWindowManager {
     private enum WindowState {
@@ -21,8 +32,11 @@ final class BreakWindowManager {
         hide()
 
         var windows: [NSWindow] = []
+        let mainScreen = NSScreen.main
+        var primaryWindow: NSWindow?
+
         for screen in NSScreen.screens {
-            let window = NSWindow(
+            let window = BreakOverlayWindow(
                 contentRect: screen.frame,
                 styleMask: [.borderless],
                 backing: .buffered,
@@ -47,19 +61,23 @@ final class BreakWindowManager {
             visualEffectView.addSubview(overlayView)
 
             let breakView = BreakView().environmentObject(timerManager)
-            let hostingView = NSHostingView(rootView: breakView)
+            let hostingView = FirstClickHostingView(rootView: breakView)
             hostingView.frame = visualEffectView.bounds
 
             visualEffectView.addSubview(hostingView)
             window.contentView = visualEffectView
             window.setFrame(screen.frame, display: true)
-            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
 
+            if screen == mainScreen || primaryWindow == nil {
+                primaryWindow = window
+            }
             windows.append(window)
         }
 
         state = .visible(windows: windows)
         NSApplication.shared.activate(ignoringOtherApps: true)
+        primaryWindow?.makeKeyAndOrderFront(nil)
     }
 
     func hide() {
