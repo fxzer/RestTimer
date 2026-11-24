@@ -133,6 +133,11 @@ final class NotificationOverlayManager {
 
         let windows = NSScreen.screens.map { makeWindow(for: kind, on: $0) }
         windows.forEach { $0.orderFront(nil) }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.20
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            windows.forEach { $0.animator().alphaValue = 1.0 }
+        }
 
         let fadeWorkItem = DispatchWorkItem { [weak self] in
             self?.beginFadeOut()
@@ -202,7 +207,7 @@ final class NotificationOverlayManager {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.backgroundColor = .clear
         window.ignoresMouseEvents = true
-        window.alphaValue = 1
+        window.alphaValue = 0.0
 
         let visibleFrame = screen.visibleFrame
         let originX = visibleFrame.midX - contentSize.width / 2

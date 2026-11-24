@@ -140,10 +140,15 @@ final class PreBreakHudManager {
             panel.level = .statusBar
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.ignoresMouseEvents = true
-            panel.alphaValue = 0.98
+            panel.alphaValue = 0.0
 
             position(panel: panel, on: screen, size: size)
             panel.orderFront(nil)
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.20
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                panel.animator().alphaValue = 1.0
+            }
             result.append(panel)
         }
 

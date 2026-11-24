@@ -118,7 +118,7 @@ internal final class TimerManager: ObservableObject {
     /// 紧急逃生通道（连按 3 次 Esc / ⌘⇧Esc / 退出应用时触发）：无条件立刻撤销全部遮罩窗并退出休息
     func emergencyExitBreak() {
         runOnMain {
-            self.breakWindowManager.hide()
+            self.breakWindowManager.hide(animated: false)
             if self.isBreakPreview {
                 self.endBreakPreview()
             } else if self.state.isBreaking {
