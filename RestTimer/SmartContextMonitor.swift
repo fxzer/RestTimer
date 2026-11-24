@@ -146,62 +146,7 @@ struct SystemSmartContextProvider: SmartContextProviding {
     }
 
     private func isMeetingMicrophoneRunning() -> Bool {
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyProcessObjectList,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var dataSize: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &dataSize) == noErr,
-              dataSize > 0 else {
-            return false
-        }
-        let count = Int(dataSize) / MemoryLayout<AudioObjectID>.size
-        var processIDs = [AudioObjectID](repeating: 0, count: count)
-        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &dataSize, &processIDs) == noErr else {
-            return false
-        }
-
-        let selfBundle = Bundle.main.bundleIdentifier?.lowercased() ?? "fxzer.top.resttimer"
-        for objID in processIDs {
-            var isIn: UInt32 = 0
-            var inSize = UInt32(MemoryLayout<UInt32>.size)
-            var inAddr = AudioObjectPropertyAddress(
-                mSelector: kAudioProcessPropertyIsRunningInput,
-                mScope: kAudioObjectPropertyScopeGlobal,
-                mElement: kAudioObjectPropertyElementMain
-            )
-            guard AudioObjectGetPropertyData(objID, &inAddr, 0, nil, &inSize, &isIn) == noErr,
-                  isIn != 0 else {
-                continue
-            }
-
-            var unmanagedBundle: Unmanaged<CFString>?
-            var bSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-            var bAddr = AudioObjectPropertyAddress(
-                mSelector: kAudioProcessPropertyBundleID,
-                mScope: kAudioObjectPropertyScopeGlobal,
-                mElement: kAudioObjectPropertyElementMain
-            )
-            let status = withUnsafeMutablePointer(to: &unmanagedBundle) { ptr in
-                AudioObjectGetPropertyData(objID, &bAddr, 0, nil, &bSize, ptr)
-            }
-            let lower = ((status == noErr ? unmanagedBundle?.takeRetainedValue() as String? : nil) ?? "").lowercased()
-
-            // 过滤系统底层音频驱动、语音听写及输入法语音进程，仅针对真实会议/通话/录屏软件
-            if lower == selfBundle
-                || lower.hasPrefix("com.apple.audio.")
-                || lower == "com.apple.coreaudiod"
-                || lower.hasPrefix("com.apple.speech")
-                || lower.hasPrefix("com.apple.siri")
-                || lower.hasPrefix("com.apple.accessibility.")
-                || lower.contains("ime")
-                || lower.contains("inputmethod") {
-                continue
-            }
-            return true
-        }
-        return false
+        !CoreAudioProcessScanner.activeUserProcessBundleIDs(direction: .input).isEmpty
     }
 
     private func isApplicationCoveringScreen(pid: pid_t) -> Bool {
@@ -284,17 +229,15 @@ struct DailyBreakStats: Codable, Equatable {
 /// 休息历史与统计存储器（兼容旧日统计，提供今日节律、近 7 日趋势与近 16 周热力聚合）
 final class DailyBreakStatsStore {
     private let userDefaults: UserDefaults
-    private let storageKey: String
     private let historyKey: String
     private let retentionDays: Int = 140
 
     init(
         userDefaults: UserDefaults = .standard,
-        storageKey: String = "DailyBreakStats_v1",
+        storageKey: String? = nil,
         historyKey: String = "BreakEventHistory_v1"
     ) {
         self.userDefaults = userDefaults
-        self.storageKey = storageKey
         self.historyKey = historyKey
     }
 
@@ -319,12 +262,6 @@ final class DailyBreakStatsStore {
                 totalBreakSeconds: events.reduce(0) { $0 + $1.breakSeconds }
             )
         }
-        // 兼容历史仅写入旧 summary 的情况
-        if let data = userDefaults.data(forKey: storageKey),
-           let decoded = try? JSONDecoder().decode(DailyBreakStats.self, from: data),
-           decoded.dayKey == today {
-            return decoded
-        }
         return DailyBreakStats(dayKey: today, completedCount: 0, totalBreakSeconds: 0)
     }
 
@@ -337,9 +274,7 @@ final class DailyBreakStatsStore {
             wasSkipped: false
         )
         appendEvent(event, now: now)
-        let updated = todayStats(now: now)
-        saveLegacySummary(updated)
-        return updated
+        return todayStats(now: now)
     }
 
     func recordSkippedBreak(focusSeconds: Int = 0, now: Date = Date()) {
@@ -422,12 +357,6 @@ final class DailyBreakStatsStore {
         list.append(event)
         if let encoded = try? JSONEncoder().encode(list) {
             userDefaults.set(encoded, forKey: historyKey)
-        }
-    }
-
-    private func saveLegacySummary(_ summary: DailyBreakStats) {
-        if let encoded = try? JSONEncoder().encode(summary) {
-            userDefaults.set(encoded, forKey: storageKey)
         }
     }
 

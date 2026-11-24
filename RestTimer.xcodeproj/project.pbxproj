@@ -29,6 +29,10 @@
 		C3A1B2122D10000100A0A60D /* CuratedQuotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B2112D10000100A0A60D /* CuratedQuotes.swift */; };
 		C3A1B2142D10000100A0A60D /* SmartContextMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B2132D10000100A0A60D /* SmartContextMonitor.swift */; };
 		C3A1B2162D10000100A0A60D /* BreakStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B2152D10000100A0A60D /* BreakStatsView.swift */; };
+		C3A1B2182D10000100A0A60D /* CoreAudioProcessScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B2172D10000100A0A60D /* CoreAudioProcessScanner.swift */; };
+		C3A1B21A2D10000100A0A60D /* MediaPlaybackPauser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B2192D10000100A0A60D /* MediaPlaybackPauser.swift */; };
+		C3A1B21C2D10000100A0A60D /* SettingsComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B21B2D10000100A0A60D /* SettingsComponents.swift */; };
+		C3A1B21E2D10000100A0A60D /* HeadphoneMediaResumeCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B21D2D10000100A0A60D /* HeadphoneMediaResumeCoordinator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,6 +79,10 @@
 		C3A1B2112D10000100A0A60D /* CuratedQuotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CuratedQuotes.swift; sourceTree = "<group>"; };
 		C3A1B2132D10000100A0A60D /* SmartContextMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartContextMonitor.swift; sourceTree = "<group>"; };
 		C3A1B2152D10000100A0A60D /* BreakStatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakStatsView.swift; sourceTree = "<group>"; };
+		C3A1B2172D10000100A0A60D /* CoreAudioProcessScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioProcessScanner.swift; sourceTree = "<group>"; };
+		C3A1B2192D10000100A0A60D /* MediaPlaybackPauser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPlaybackPauser.swift; sourceTree = "<group>"; };
+		C3A1B21B2D10000100A0A60D /* SettingsComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsComponents.swift; sourceTree = "<group>"; };
+		C3A1B21D2D10000100A0A60D /* HeadphoneMediaResumeCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeadphoneMediaResumeCoordinator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -142,6 +150,10 @@
 				C3A1B2112D10000100A0A60D /* CuratedQuotes.swift */,
 				C3A1B2132D10000100A0A60D /* SmartContextMonitor.swift */,
 				C3A1B2152D10000100A0A60D /* BreakStatsView.swift */,
+				C3A1B2172D10000100A0A60D /* CoreAudioProcessScanner.swift */,
+				C3A1B2192D10000100A0A60D /* MediaPlaybackPauser.swift */,
+				C3A1B21B2D10000100A0A60D /* SettingsComponents.swift */,
+				C3A1B21D2D10000100A0A60D /* HeadphoneMediaResumeCoordinator.swift */,
 				C3E3E3102D03F1F300A0A60D /* Assets.xcassets */,
 				C3E3E3122D03F1F300A0A60D /* RestTimer.entitlements */,
 				C3E3E3132D03F1F300A0A60D /* Preview Content */,
@@ -321,6 +333,10 @@
 				C3A1B2122D10000100A0A60D /* CuratedQuotes.swift in Sources */,
 				C3A1B2142D10000100A0A60D /* SmartContextMonitor.swift in Sources */,
 				C3A1B2162D10000100A0A60D /* BreakStatsView.swift in Sources */,
+				C3A1B2182D10000100A0A60D /* CoreAudioProcessScanner.swift in Sources */,
+				C3A1B21A2D10000100A0A60D /* MediaPlaybackPauser.swift in Sources */,
+				C3A1B21C2D10000100A0A60D /* SettingsComponents.swift in Sources */,
+				C3A1B21E2D10000100A0A60D /* HeadphoneMediaResumeCoordinator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

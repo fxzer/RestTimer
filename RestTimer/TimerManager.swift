@@ -42,8 +42,7 @@ internal final class TimerManager: ObservableObject {
     private var startupWorkItem: DispatchWorkItem?
     private var dockPolicyWorkItem: DispatchWorkItem?
     private var previewRestoreTarget: PreviewRestoreTarget?
-    private var didAutoPauseMediaForCurrentBreak = false
-    private var pendingHeadphoneMediaResumeDeadline: TimeInterval?
+    private let headphoneResumeCoordinator = HeadphoneMediaResumeCoordinator()
     private var lastWorkSegmentFocusSeconds: Int = 0
     private var isAdjustingSettings = false
     private var lastDndCheckTimestamp: TimeInterval = 0
@@ -55,7 +54,6 @@ internal final class TimerManager: ObservableObject {
     var isBreakTime: Bool { state.isBreaking }
     var preventQuit: Bool { !isBreakPreview && state.preventQuit }
     var remainingBreakTime: TimeInterval { state.remainingBreakTime }
-    var pendingOverdueSeconds: TimeInterval { state.pendingOverdueSeconds }
 
     var workDuration: TimeInterval { TimeInterval(settings.workTotalSeconds) }
     var breakDuration: TimeInterval { TimeInterval(settings.breakTotalSeconds) }
@@ -175,6 +173,7 @@ internal final class TimerManager: ObservableObject {
     func emergencyExitBreak() {
         runOnMain {
             self.breakWindowManager.hide(animated: false)
+            self.headphoneResumeCoordinator.reset()
             if self.isBreakPreview {
                 self.endBreakPreview()
             } else if self.state.isBreaking {
@@ -346,6 +345,7 @@ internal final class TimerManager: ObservableObject {
         runOnMain {
             self.isBreakPreview = false
             self.previewRestoreTarget = nil
+            self.headphoneResumeCoordinator.reset()
             self.startupWorkItem?.cancel()
             self.startupWorkItem = nil
             self.transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: true)
@@ -448,13 +448,14 @@ internal final class TimerManager: ObservableObject {
 
         case .breaking(let initialRemaining):
             isDeferredByDND = false
-            pendingHeadphoneMediaResumeDeadline = nil
+            headphoneResumeCoordinator.reset()
             preBreakHud.hide()
             toastOverlay.dismissImmediately()
             if !wasBreaking && !isBreakPreview && settings.pauseMediaOnBreak {
-                didAutoPauseMediaForCurrentBreak = MediaPlaybackPauser.pauseActiveMediaIfNeeded()
+                let didPause = MediaPlaybackPauser.pauseActiveMediaIfNeeded()
+                headphoneResumeCoordinator.recordBreakStarted(mediaWasPaused: didPause)
             } else if !wasBreaking {
-                didAutoPauseMediaForCurrentBreak = false
+                headphoneResumeCoordinator.recordBreakStarted(mediaWasPaused: false)
             }
             breakWindowManager.show(timerManager: self)
 
@@ -538,16 +539,12 @@ internal final class TimerManager: ObservableObject {
     }
 
     private func handleHeadphoneMediaResumeAfterBreak(userIsPresent: Bool) {
-        guard didAutoPauseMediaForCurrentBreak else { return }
-        didAutoPauseMediaForCurrentBreak = false
-        guard settings.pauseMediaOnBreak && settings.resumeMediaWithHeadphones else { return }
-
-        if userIsPresent {
-            _ = MediaPlaybackPauser.resumePausedMediaIfHeadphonesConnected(contextProvider: contextProvider)
-        } else {
-            // 用户尚在离开状态：挂起 90 秒观察窗，回到工位动键鼠且耳机在位时再无缝续播，绝不外放
-            pendingHeadphoneMediaResumeDeadline = Date().timeIntervalSince1970 + 90.0
-        }
+        headphoneResumeCoordinator.handleBreakEnded(
+            userIsPresent: userIsPresent,
+            contextProvider: contextProvider,
+            pauseMediaOnBreak: settings.pauseMediaOnBreak,
+            resumeMediaWithHeadphones: settings.resumeMediaWithHeadphones
+        )
     }
 
     private func shouldDeferForDoNotDisturb(forceRefresh: Bool = false) -> Bool {
@@ -612,17 +609,14 @@ internal final class TimerManager: ObservableObject {
             }
             let idle = activityMonitor.idleDuration(monitorKeyboard: true, monitorMouse: true)
             // 休息结束用户回到工位且耳机在位时自动续播先前暂停的媒体
-            if let resumeDeadline = pendingHeadphoneMediaResumeDeadline {
-                let now = Date().timeIntervalSince1970
-                if now > resumeDeadline {
-                    pendingHeadphoneMediaResumeDeadline = nil
-                } else if idle < 2.0 {
-                    pendingHeadphoneMediaResumeDeadline = nil
-                    if settings.pauseMediaOnBreak && settings.resumeMediaWithHeadphones {
-                        _ = MediaPlaybackPauser.resumePausedMediaIfHeadphonesConnected(contextProvider: contextProvider)
-                    }
-                }
-            }
+            let now = Date().timeIntervalSince1970
+            headphoneResumeCoordinator.evaluateActivityTick(
+                idle: idle,
+                now: now,
+                contextProvider: contextProvider,
+                pauseMediaOnBreak: settings.pauseMediaOnBreak,
+                resumeMediaWithHeadphones: settings.resumeMediaWithHeadphones
+            )
             if settings.autoResetOnIdle {
                 let elapsedWork = Date().timeIntervalSince1970 - startedAt
                 if BreakDelayEvaluator.shouldEnterAwayState(

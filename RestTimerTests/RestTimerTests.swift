@@ -530,4 +530,50 @@ final class RestTimerTests: XCTestCase {
         WindowManager.shared.closeSettings()
         XCTAssertFalse(WindowManager.shared.isSettingsWindowVisible)
     }
+
+    func testHeadphoneMediaResumeExplicitStateTransitions() {
+        final class MockHeadphoneContext: SmartContextProviding {
+            var headphonesConnected = true
+            func isHeadphonesOutputConnected() -> Bool { headphonesConnected }
+            func isInMeetingOrCall() -> Bool { false }
+            func isFullscreenMediaOrPresentation() -> Bool { false }
+        }
+
+        let coordinator = HeadphoneMediaResumeCoordinator()
+        let context = MockHeadphoneContext()
+
+        XCTAssertEqual(coordinator.state, .idle)
+
+        // 1. 进入休息时记录媒体暂停
+        coordinator.recordBreakStarted(mediaWasPaused: true)
+        XCTAssertEqual(coordinator.state, .pausedForBreak)
+
+        // 2. 用户不在工位结束休息 -> 开启观察窗
+        coordinator.handleBreakEnded(
+            userIsPresent: false,
+            contextProvider: context,
+            pauseMediaOnBreak: true,
+            resumeMediaWithHeadphones: true
+        )
+        if case .observingReturn(let deadline) = coordinator.state {
+            XCTAssertGreaterThan(deadline, Date().timeIntervalSince1970)
+        } else {
+            XCTFail("Should transition to observingReturn")
+        }
+
+        // 3. 用户回工位 (idle < 2.0) -> 触发续播并回归 idle
+        coordinator.evaluateActivityTick(
+            idle: 1.0,
+            now: Date().timeIntervalSince1970,
+            contextProvider: context,
+            pauseMediaOnBreak: true,
+            resumeMediaWithHeadphones: true
+        )
+        XCTAssertEqual(coordinator.state, .idle)
+
+        // 4. 重置验证
+        coordinator.recordBreakStarted(mediaWasPaused: true)
+        coordinator.reset()
+        XCTAssertEqual(coordinator.state, .idle)
+    }
 }

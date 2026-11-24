@@ -108,12 +108,6 @@ struct StretchExercise: Identifiable, Equatable {
     }
 }
 
-/// 结构化名言模型
-struct CuratedQuote: Equatable {
-    let text: String
-    let author: String
-}
-
 /// 办公室久坐运动与名言智能编排器（五大部位全覆盖，按从头到脚顺序排列，共 20 个动作）
 enum StretchRoutinePlanner {
     static let catalog: [StretchExercise] = [

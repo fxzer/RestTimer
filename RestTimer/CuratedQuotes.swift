@@ -1,5 +1,11 @@
 import Foundation
 
+/// 结构化名言模型
+struct CuratedQuote: Equatable {
+    let text: String
+    let author: String
+}
+
 /// 精选可考名言库（60 条真实原句，覆盖古籍诗词、中外文学、哲学思想与科学工程；采用洗牌袋算法，全部轮完再重洗，杜绝连续重复）
 enum CuratedQuoteLibrary {
     static let all: [CuratedQuote] = [
