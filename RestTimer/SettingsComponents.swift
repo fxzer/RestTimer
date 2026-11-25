@@ -107,7 +107,7 @@ struct SettingsPillButton: View {
 /// 设置页「关于」Tab 视图
 struct SettingsAboutView: View {
     private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.12"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.15"
     }
 
     private var appBuild: String {

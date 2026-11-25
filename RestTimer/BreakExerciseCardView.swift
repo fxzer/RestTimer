@@ -162,8 +162,8 @@ final class ExerciseImageLoader {
     private let cache = NSCache<NSString, NSImage>()
 
     private init() {
-        cache.countLimit = 4 // 最多缓存 4 张当前动作与相邻招式缩略图
-        cache.totalCostLimit = 8 * 1024 * 1024 // 上限 8MB
+        cache.countLimit = 8 // 最多缓存 8 张（支持多张并排 3 卡预览与单张大图缓存复用）
+        cache.totalCostLimit = 12 * 1024 * 1024 // 上限 12MB
     }
 
     /// 针对 Retina 2x 屏幕，将 255×340 pt 解码为 510×680 像素

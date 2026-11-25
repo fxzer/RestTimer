@@ -131,6 +131,24 @@ struct BreakView: View {
             .focusable(false)
             .help(timerManager.settings.enableBreakExerciseGuide ? "切换为静谧呼吸模式 (M)" : "切换为拉伸引导模式 (M)")
 
+            if timerManager.settings.enableBreakExerciseGuide {
+                let isMulti = timerManager.settings.breakExerciseMultiView
+                Button(action: toggleExerciseMultiView) {
+                    Image(systemName: isMulti ? "rectangle.split.3x1.fill" : "rectangle.split.3x1")
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .foregroundColor(Color.white.opacity(0.88))
+                        .frame(width: 34, height: 34)
+                        .background(
+                            Circle()
+                                .fill(Color.white.opacity(isMulti ? 0.24 : 0.09))
+                        )
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .help(isMulti ? "切换为单张大图模式 (V)" : "切换为多张并排模式 (V)")
+            }
+
             if timerManager.isBreakPreview {
                 Rectangle()
                     .fill(Color.white.opacity(0.22))
@@ -188,62 +206,62 @@ struct BreakView: View {
     // MARK: - 居中视觉核心舞台
 
     private var centerHeroStage: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: timerManager.settings.breakExerciseMultiView ? 18 : 24) {
             if timerManager.settings.enableBreakExerciseGuide, let exercise = currentExercise {
-                Button(action: toggleExerciseGuideMode) {
-                    Text(remainingTimeText())
-                        .font(.system(size: 56, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .monospacedDigit()
-                        .shadow(color: Color.black.opacity(0.20), radius: 6, x: 0, y: 2)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .help("点击切换为静谧呼吸模式 (M)")
+                if timerManager.settings.breakExerciseMultiView {
+                    multiExerciseStage(activeExercise: exercise)
+                } else {
+                    countdownToggleButton(fontSize: 56)
 
-                BreakExerciseHeroView(
-                    exercise: exercise,
-                    onPrevious: previousExercise,
-                    onNext: nextExercise
-                )
+                    BreakExerciseHeroView(
+                        exercise: exercise,
+                        onPrevious: previousExercise,
+                        onNext: nextExercise
+                    )
 
-                VStack(spacing: 14) {
-                    Text(exercise.name)
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .shadow(color: Color.black.opacity(0.16), radius: 4, x: 0, y: 2)
-                        .id("title-\(exercise.id)")
-                        .transition(.opacity)
+                    VStack(spacing: 14) {
+                        Text(exercise.name)
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                            .shadow(color: Color.black.opacity(0.16), radius: 4, x: 0, y: 2)
+                            .id("title-\(exercise.id)")
+                            .transition(.opacity)
 
-                    HStack(spacing: 10) {
-                        heroActionButton(
-                            icon: exercise.category.symbolName,
-                            text: exercise.badgeText,
-                            help: "点击切换部位（颈部 ➔ 肩背 ➔ 手腕 ➔ 腰脊 ➔ 臀腿）",
-                            action: jumpToNextCategory
-                        )
-                        heroActionButton(
-                            icon: "arrow.triangle.2.circlepath",
-                            text: "换一招 (\(currentCatalogPosition)/\(StretchRoutinePlanner.catalog.count))",
-                            help: "切换下一招 (→ 或空格)",
-                            action: nextExercise
-                        )
-                    }
-
-                    VStack(spacing: 7) {
-                        ForEach(exercise.steps, id: \.self) { step in
-                            Text(step)
-                                .font(.system(size: 19, weight: .regular, design: .rounded))
-                                .foregroundColor(Color.white.opacity(0.90))
-                                .multilineTextAlignment(.center)
-                                .shadow(color: Color.black.opacity(0.12), radius: 2, x: 0, y: 1)
+                        HStack(spacing: 10) {
+                            heroActionButton(
+                                icon: exercise.category.symbolName,
+                                text: exercise.badgeText,
+                                help: "点击切换部位（颈部 ➔ 肩背 ➔ 手腕 ➔ 腰脊 ➔ 臀腿）",
+                                action: jumpToNextCategory
+                            )
+                            heroActionButton(
+                                icon: "arrow.triangle.2.circlepath",
+                                text: "换一招 (\(currentCatalogPosition)/\(StretchRoutinePlanner.catalog.count))",
+                                help: "切换下一招 (→ 或空格)",
+                                action: nextExercise
+                            )
+                            heroActionButton(
+                                icon: "rectangle.split.3x1",
+                                text: "多张并排",
+                                help: "同屏并排查看 3 个动作 (V)",
+                                action: toggleExerciseMultiView
+                            )
                         }
+
+                        VStack(spacing: 7) {
+                            ForEach(exercise.steps, id: \.self) { step in
+                                Text(step)
+                                    .font(.system(size: 19, weight: .regular, design: .rounded))
+                                    .foregroundColor(Color.white.opacity(0.90))
+                                    .multilineTextAlignment(.center)
+                                    .shadow(color: Color.black.opacity(0.12), radius: 2, x: 0, y: 1)
+                            }
+                        }
+                        .frame(height: 56, alignment: .top)
+                        .padding(.top, 2)
+                        .id("steps-\(exercise.id)")
+                        .transition(.opacity)
                     }
-                    .frame(height: 56, alignment: .top)
-                    .padding(.top, 2)
-                    .id("steps-\(exercise.id)")
-                    .transition(.opacity)
                 }
             } else {
                 // 纯静谧呼吸模式
@@ -337,6 +355,82 @@ struct BreakView: View {
         withAnimation(.timingCurve(0.22, 1.0, 0.36, 1.0, duration: 0.34)) {
             timerManager.settings.enableBreakExerciseGuide.toggle()
         }
+    }
+
+    private func toggleExerciseMultiView() {
+        withAnimation(.timingCurve(0.22, 1.0, 0.36, 1.0, duration: 0.28)) {
+            timerManager.settings.breakExerciseMultiView.toggle()
+        }
+    }
+
+    private func nextBatch() {
+        stepCatalog(by: BreakDisplaySession.multiCardBatchCount)
+    }
+
+    private func selectBatchCard(_ exercise: StretchExercise) {
+        session.selectExercise(exercise)
+        withAnimation(.timingCurve(0.22, 1.0, 0.36, 1.0, duration: 0.28)) {
+            timerManager.settings.breakExerciseMultiView = false
+        }
+    }
+
+    private func multiExerciseStage(activeExercise: StretchExercise) -> some View {
+        let totalCatalog = StretchRoutinePlanner.catalog.count
+        let batch = session.displayedBatch(
+            totalBreakSeconds: totalBreakSeconds,
+            elapsedSeconds: elapsedSeconds
+        )
+        return VStack(spacing: 18) {
+            countdownToggleButton(fontSize: 48)
+
+            HStack(alignment: .top, spacing: 18) {
+                ForEach(batch) { item in
+                    BreakExerciseBatchCard(
+                        exercise: item,
+                        positionText: "\(session.catalogPosition(for: item))/\(totalCatalog)",
+                        isActive: item.id == activeExercise.id,
+                        accentColor: themeAccentColor
+                    ) {
+                        selectBatchCard(item)
+                    }
+                }
+            }
+
+            HStack(spacing: 10) {
+                heroActionButton(
+                    icon: activeExercise.category.symbolName,
+                    text: activeExercise.badgeText,
+                    help: "点击切换部位（颈部 ➔ 肩背 ➔ 手腕 ➔ 腰脊 ➔ 臀腿）",
+                    action: jumpToNextCategory
+                )
+                heroActionButton(
+                    icon: "rectangle.portrait",
+                    text: "切回单张",
+                    help: "切换为单张大图模式 (V)",
+                    action: toggleExerciseMultiView
+                )
+                heroActionButton(
+                    icon: "arrow.triangle.2.circlepath",
+                    text: "换一批 (\(session.batchProgressLabel(for: batch)))",
+                    help: "同时切换下一组 \(BreakDisplaySession.multiCardBatchCount) 个动作 (→ 或空格)",
+                    action: nextBatch
+                )
+            }
+        }
+    }
+
+    private func countdownToggleButton(fontSize: CGFloat) -> some View {
+        Button(action: toggleExerciseGuideMode) {
+            Text(remainingTimeText())
+                .font(.system(size: fontSize, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .monospacedDigit()
+                .shadow(color: Color.black.opacity(0.20), radius: 6, x: 0, y: 2)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .help("点击切换为静谧呼吸模式 (M)")
     }
 
     private func remainingTimeText() -> String {

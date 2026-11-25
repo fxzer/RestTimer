@@ -2,6 +2,8 @@ import SwiftUI
 
 /// 多显示器共享的休息展示会话状态（单一数据源：主题、名言、拉伸编排与手动切换在全部屏幕间实时同步）
 final class BreakDisplaySession: ObservableObject {
+    static let multiCardBatchCount = 3
+
     @Published private(set) var displayedTheme: BreakGradientTheme = .frostedGlass
     @Published private(set) var currentQuote: CuratedQuote = CuratedQuoteLibrary.all[0]
     @Published private(set) var routine: [StretchExercise] = []
@@ -59,6 +61,68 @@ final class BreakDisplaySession: ObservableObject {
             return 1
         }
         return idx + 1
+    }
+
+    /// 返回当前多张并排模式下应同屏展示的一组不重复动作（默认 3 张，兼容短休息自动补齐与手动整批翻页）
+    func displayedBatch(
+        totalBreakSeconds: TimeInterval,
+        elapsedSeconds: TimeInterval,
+        batchCount: Int = BreakDisplaySession.multiCardBatchCount
+    ) -> [StretchExercise] {
+        let all = StretchRoutinePlanner.catalog
+        guard !all.isEmpty else { return [] }
+        let targetCount = min(max(1, batchCount), all.count)
+
+        if hasManualSwitch {
+            return (0..<targetCount).map { offset in
+                let idx = ((catalogIndex + offset) % all.count + all.count) % all.count
+                return all[idx]
+            }
+        }
+
+        var result: [StretchExercise] = []
+        if routine.count > targetCount,
+           let active = currentExercise(totalBreakSeconds: totalBreakSeconds, elapsedSeconds: elapsedSeconds),
+           let activeIdx = routine.firstIndex(where: { $0.id == active.id }) {
+            let pageStart = min(routine.count - targetCount, (activeIdx / targetCount) * targetCount)
+            result = Array(routine[pageStart..<(pageStart + targetCount)])
+        } else {
+            result = routine
+        }
+
+        if result.count < targetCount {
+            let existingIds = Set(result.map(\.id))
+            for candidate in all where !existingIds.contains(candidate.id) {
+                result.append(candidate)
+                if result.count >= targetCount { break }
+            }
+        }
+        return result
+    }
+
+    func selectExercise(_ exercise: StretchExercise) {
+        guard let idx = StretchRoutinePlanner.catalog.firstIndex(where: { $0.id == exercise.id }) else { return }
+        withAnimation(.timingCurve(0.22, 1.0, 0.36, 1.0, duration: 0.22)) {
+            catalogIndex = idx
+            hasManualSwitch = true
+        }
+    }
+
+    /// 格式化当前多张批次在总动作库中的序号进度（连续切片显示 `1-3/20`，跨部位套餐显示 `2·8·15/20`）
+    func batchProgressLabel(for batch: [StretchExercise]) -> String {
+        let total = StretchRoutinePlanner.catalog.count
+        guard !batch.isEmpty, total > 0 else { return "0/0" }
+        let positions = batch.map { catalogPosition(for: $0) }
+        if positions.count == 1 {
+            return "\(positions[0])/\(total)"
+        }
+        let isContiguous = zip(positions, positions.dropFirst()).allSatisfy { prev, next in
+            next == (prev % total) + 1
+        }
+        if isContiguous, let first = positions.first, let last = positions.last {
+            return "\(first)-\(last)/\(total)"
+        }
+        return positions.map(String.init).joined(separator: "·") + "/\(total)"
     }
 
     func selectTheme(_ theme: BreakGradientTheme) {

@@ -192,6 +192,7 @@ struct TimerSettings: Codable, Equatable {
     var pauseMediaOnBreak: Bool = true
     var resumeMediaWithHeadphones: Bool = true
     var enableBreakExerciseGuide: Bool = true
+    var breakExerciseMultiView: Bool = false
     var breakGradientTheme: BreakGradientTheme = .autoDayNight
 
     static let `default` = TimerSettings(
@@ -215,6 +216,7 @@ struct TimerSettings: Codable, Equatable {
         pauseMediaOnBreak: true,
         resumeMediaWithHeadphones: true,
         enableBreakExerciseGuide: true,
+        breakExerciseMultiView: false,
         breakGradientTheme: .autoDayNight
     )
 
@@ -239,6 +241,7 @@ struct TimerSettings: Codable, Equatable {
         pauseMediaOnBreak: Bool = true,
         resumeMediaWithHeadphones: Bool = true,
         enableBreakExerciseGuide: Bool = true,
+        breakExerciseMultiView: Bool = false,
         breakGradientTheme: BreakGradientTheme = .autoDayNight
     ) {
         self.showSkipButton = showSkipButton
@@ -261,6 +264,7 @@ struct TimerSettings: Codable, Equatable {
         self.pauseMediaOnBreak = pauseMediaOnBreak
         self.resumeMediaWithHeadphones = resumeMediaWithHeadphones
         self.enableBreakExerciseGuide = enableBreakExerciseGuide
+        self.breakExerciseMultiView = breakExerciseMultiView
         self.breakGradientTheme = breakGradientTheme
     }
 
@@ -297,6 +301,7 @@ struct TimerSettings: Codable, Equatable {
         pauseMediaOnBreak = try container.decodeIfPresent(Bool.self, forKey: .pauseMediaOnBreak) ?? fallback.pauseMediaOnBreak
         resumeMediaWithHeadphones = try container.decodeIfPresent(Bool.self, forKey: .resumeMediaWithHeadphones) ?? fallback.resumeMediaWithHeadphones
         enableBreakExerciseGuide = try container.decodeIfPresent(Bool.self, forKey: .enableBreakExerciseGuide) ?? fallback.enableBreakExerciseGuide
+        breakExerciseMultiView = try container.decodeIfPresent(Bool.self, forKey: .breakExerciseMultiView) ?? fallback.breakExerciseMultiView
         breakGradientTheme = try container.decodeIfPresent(BreakGradientTheme.self, forKey: .breakGradientTheme) ?? fallback.breakGradientTheme
     }
 

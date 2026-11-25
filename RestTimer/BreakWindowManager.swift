@@ -165,13 +165,20 @@ final class BreakWindowManager {
             }
             return nil
         case 123:
-            displaySession.stepCatalog(by: -1, totalBreakSeconds: totalBreak, elapsedSeconds: elapsed)
+            let step = timerManager.settings.breakExerciseMultiView ? -BreakDisplaySession.multiCardBatchCount : -1
+            displaySession.stepCatalog(by: step, totalBreakSeconds: totalBreak, elapsedSeconds: elapsed)
             return nil
         case 124, 49:
-            displaySession.stepCatalog(by: 1, totalBreakSeconds: totalBreak, elapsedSeconds: elapsed)
+            let step = timerManager.settings.breakExerciseMultiView ? BreakDisplaySession.multiCardBatchCount : 1
+            displaySession.stepCatalog(by: step, totalBreakSeconds: totalBreak, elapsedSeconds: elapsed)
             return nil
         case 48:
             displaySession.jumpToNextCategory(totalBreakSeconds: totalBreak, elapsedSeconds: elapsed)
+            return nil
+        case 9: // V：切换单张大图 / 多张并排视图
+            withAnimation(.timingCurve(0.22, 1.0, 0.36, 1.0, duration: 0.28)) {
+                timerManager.settings.breakExerciseMultiView.toggle()
+            }
             return nil
         case 46:
             withAnimation(.timingCurve(0.22, 1.0, 0.36, 1.0, duration: 0.34)) {

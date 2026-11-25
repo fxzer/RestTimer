@@ -744,6 +744,36 @@ final class RestTimerTests: XCTestCase {
         session.jumpToNextCategory(totalBreakSeconds: 120, elapsedSeconds: 0)
         let afterCategory = session.currentExercise(totalBreakSeconds: 120, elapsedSeconds: 0)
         XCTAssertNotEqual(afterCategory?.category, afterStep?.category)
+
+        // 多张并排视图：返回指定数量的不重复动作批次，点击单个动作可切换并选中它
+        session.prepareSession(totalBreakSeconds: 120, themeSetting: .slateIce)
+        let autoBatch = session.displayedBatch(totalBreakSeconds: 120, elapsedSeconds: 0)
+        XCTAssertEqual(autoBatch.count, BreakDisplaySession.multiCardBatchCount)
+        XCTAssertEqual(Set(autoBatch.map(\.id)).count, BreakDisplaySession.multiCardBatchCount)
+
+        session.stepCatalog(by: BreakDisplaySession.multiCardBatchCount, totalBreakSeconds: 120, elapsedSeconds: 0)
+        let manualBatch = session.displayedBatch(totalBreakSeconds: 120, elapsedSeconds: 0)
+        XCTAssertEqual(manualBatch.count, BreakDisplaySession.multiCardBatchCount)
+        XCTAssertNotEqual(manualBatch.map(\.id), autoBatch.map(\.id))
+
+        let picked = StretchRoutinePlanner.catalog[10]
+        session.selectExercise(picked)
+        XCTAssertEqual(session.currentExercise(totalBreakSeconds: 120, elapsedSeconds: 0)?.id, picked.id)
+
+        let contiguousSample = Array(StretchRoutinePlanner.catalog[0..<3])
+        XCTAssertEqual(session.batchProgressLabel(for: contiguousSample), "1-3/\(StretchRoutinePlanner.catalog.count)")
+        let wrapSample = [
+            StretchRoutinePlanner.catalog[18],
+            StretchRoutinePlanner.catalog[19],
+            StretchRoutinePlanner.catalog[0]
+        ]
+        XCTAssertEqual(session.batchProgressLabel(for: wrapSample), "19-1/\(StretchRoutinePlanner.catalog.count)")
+        let mixedSample = [
+            StretchRoutinePlanner.catalog[1],
+            StretchRoutinePlanner.catalog[7],
+            StretchRoutinePlanner.catalog[14]
+        ]
+        XCTAssertEqual(session.batchProgressLabel(for: mixedSample), "2·8·15/\(StretchRoutinePlanner.catalog.count)")
     }
 
     func testBreakWindowManagerPreservesSessionOnScreenChangeAndSingleKeyHandling() {
@@ -753,12 +783,17 @@ final class RestTimerTests: XCTestCase {
             breakWindowManager: windowManager,
             autoStart: false
         )
+        let savedSettings = manager.settings
         manager.settings.breakGradientTheme = .autoDayNight
         manager.settings.enableBreakExerciseGuide = true
+        manager.settings.breakExerciseMultiView = false
         manager.settings.pauseMediaOnBreak = false
 
         manager.startBreakImmediately()
-        defer { manager.emergencyExitBreak() }
+        defer {
+            manager.emergencyExitBreak()
+            manager.settings = savedSettings
+        }
 
         let initialQuote = windowManager.displaySession.currentQuote
         let initialTheme = windowManager.displaySession.displayedTheme
@@ -789,6 +824,38 @@ final class RestTimerTests: XCTestCase {
             XCTAssertEqual(windowManager.displaySession.catalogIndex, expectedNext)
         } else {
             XCTFail("Failed to construct keyDown event")
+        }
+
+        if let toggleMultiView = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: "v",
+            charactersIgnoringModifiers: "v",
+            isARepeat: false,
+            keyCode: 9
+        ), let rightArrow = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: "",
+            charactersIgnoringModifiers: "",
+            isARepeat: false,
+            keyCode: 124
+        ) {
+            XCTAssertNil(windowManager.handleKeyDown(toggleMultiView, timerManager: manager))
+            XCTAssertTrue(manager.settings.breakExerciseMultiView)
+            let expectedBatchNext = (windowManager.displaySession.catalogIndex + BreakDisplaySession.multiCardBatchCount) % StretchRoutinePlanner.catalog.count
+            XCTAssertNil(windowManager.handleKeyDown(rightArrow, timerManager: manager))
+            XCTAssertEqual(windowManager.displaySession.catalogIndex, expectedBatchNext)
+        } else {
+            XCTFail("Failed to construct V/RightArrow keyDown event")
         }
 
         if let toggleGuide = NSEvent.keyEvent(
@@ -910,6 +977,17 @@ final class RestTimerTests: XCTestCase {
         )
         breakHosting.layoutSubtreeIfNeeded()
         XCTAssertGreaterThanOrEqual(breakHosting.fittingSize.width, 1200)
+
+        let prevMulti = TimerManager.shared.settings.breakExerciseMultiView
+        TimerManager.shared.settings.breakExerciseMultiView = true
+        defer { TimerManager.shared.settings.breakExerciseMultiView = prevMulti }
+        let multiHosting = NSHostingView(
+            rootView: BreakView(session: session)
+                .environmentObject(TimerManager.shared)
+                .frame(width: 1200, height: 800)
+        )
+        multiHosting.layoutSubtreeIfNeeded()
+        XCTAssertGreaterThanOrEqual(multiHosting.fittingSize.width, 1200)
 
         for (iconKind, title) in [
             (HudIconKind.focusStart, "开始专注"),
