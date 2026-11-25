@@ -113,16 +113,12 @@ struct FocusClockDialView: View {
     }
 
     private var knobHandle: some View {
-        let angleRad = (workProgress * 2.0 * .pi) - (.pi / 2.0)
-        let knobX = cos(angleRad) * ringRadius
-        let knobY = sin(angleRad) * ringRadius
-
-        return Circle()
+        Circle()
             .fill(Color.white)
             .frame(width: isDragging ? 17 : 15, height: isDragging ? 17 : 15)
             .overlay(Circle().strokeBorder(primaryAccentColor, lineWidth: 3))
             .shadow(color: Color.black.opacity(0.18), radius: 2, x: 0, y: 1)
-            .offset(x: knobX, y: knobY)
+            .modifier(ArcKnobOffset(progress: workProgress, radius: ringRadius))
     }
 
     private var centerReadout: some View {
@@ -187,5 +183,26 @@ struct FocusClockDialView: View {
         if finalMinutes != clampedWorkMinutes {
             onWorkMinutesChanged(finalMinutes)
         }
+    }
+}
+
+/// 沿圆弧极坐标插值定位拖动手柄，确保点击跳转时跟随弧线与蓝色进度条末端同步运动而非直线斜穿表盘
+struct ArcKnobOffset: ViewModifier, Animatable {
+    var progress: Double
+    let radius: CGFloat
+
+    var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    static func point(progress: Double, radius: CGFloat) -> CGPoint {
+        let angleRad = (progress * 2.0 * .pi) - (.pi / 2.0)
+        return CGPoint(x: cos(angleRad) * radius, y: sin(angleRad) * radius)
+    }
+
+    func body(content: Content) -> some View {
+        let pt = Self.point(progress: progress, radius: radius)
+        content.offset(x: pt.x, y: pt.y)
     }
 }

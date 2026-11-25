@@ -195,6 +195,35 @@ struct BreakEventRecord: Codable, Equatable, Identifiable {
         self.focusSeconds = focusSeconds
         self.wasSkipped = wasSkipped
     }
+
+    static func rawTimelineRatio(for date: Date) -> CGFloat {
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let mins = Double((comps.hour ?? 0) * 60 + (comps.minute ?? 0))
+        return CGFloat((mins - 480.0) / 900.0)
+    }
+
+    static func xPosition(for timestamp: TimeInterval, width: CGFloat) -> CGFloat {
+        let ratio = min(1.0, max(0.0, rawTimelineRatio(for: Date(timeIntervalSince1970: timestamp))))
+        return max(6, min(width - 6, ratio * width))
+    }
+
+    /// 根据鼠标水平坐标就近吸附休息事件，避免多段竖条叠加时只有最后一条响应悬停
+    static func nearestEvent(
+        atX x: CGFloat,
+        width: CGFloat,
+        events: [BreakEventRecord],
+        maxDistance: CGFloat = 14.0
+    ) -> BreakEventRecord? {
+        var best: (event: BreakEventRecord, distance: CGFloat)?
+        for event in events {
+            let posX = xPosition(for: event.timestamp, width: width)
+            let distance = abs(x - posX)
+            if distance <= maxDistance, best == nil || distance < best!.distance {
+                best = (event, distance)
+            }
+        }
+        return best?.event
+    }
 }
 
 /// 单日汇总桶（供近 7 日柱图与近 16 周热力图复用）

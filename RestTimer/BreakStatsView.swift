@@ -218,42 +218,57 @@ struct BreakStatsView: View {
 
                             // 每次完成休息 = 主题色亮竖条；主动跳过 = 淡橙小圆点
                             ForEach(events) { event in
-                                let eventDate = Date(timeIntervalSince1970: event.timestamp)
-                                let ratio = clampedTimelineRatio(for: eventDate)
+                                let posX = BreakEventRecord.xPosition(for: event.timestamp, width: width)
                                 let isHovered = hoveredEvent?.id == event.id
 
                                 Group {
                                     if event.wasSkipped {
                                         Circle()
                                             .fill(Color.orange.opacity(isHovered ? 1.0 : 0.72))
-                                            .frame(width: isHovered ? 9 : 6.5, height: isHovered ? 9 : 6.5)
+                                            .frame(width: isHovered ? 7.5 : 5.5, height: isHovered ? 7.5 : 5.5)
                                     } else {
                                         Capsule()
                                             .fill(Color.accentColor.opacity(isHovered ? 1.0 : 0.85))
-                                            .frame(width: isHovered ? 6 : 4.5, height: isHovered ? 28 : 22)
+                                            .frame(width: isHovered ? 4.5 : 3.0, height: isHovered ? 22 : 16)
                                     }
                                 }
-                                .padding(4)
-                                .contentShape(Rectangle())
-                                .position(x: max(6, min(width - 6, ratio * width)), y: midY)
-                                .onHover { hovering in
-                                    hoveredEvent = hovering ? event : (hoveredEvent?.id == event.id ? nil : hoveredEvent)
-                                }
+                                .position(x: posX, y: midY)
+                                .allowsHitTesting(false)
+                            }
+                        }
+                        .animation(.easeOut(duration: 0.14), value: hoveredEvent?.id)
+                        .contentShape(Rectangle())
+                        .onContinuousHover { phase in
+                            switch phase {
+                            case .active(let location):
+                                hoveredEvent = BreakEventRecord.nearestEvent(
+                                    atX: location.x,
+                                    width: width,
+                                    events: events
+                                )
+                            case .ended:
+                                hoveredEvent = nil
                             }
                         }
                     }
-                    .frame(height: 40)
+                    .frame(height: 34)
 
-                    // 时刻刻度（08 - 23）
-                    HStack {
-                        ForEach(["08", "12", "16", "20", "23"], id: \.self) { label in
-                            Text(label)
-                                .font(.system(size: 9.5, design: .rounded))
-                                .foregroundColor(Color(nsColor: .tertiaryLabelColor))
-                                .monospacedDigit()
-                            if label != "23" { Spacer() }
+                    // 时刻刻度（按 08:00-23:00 真实比例对齐，避免 20 与 23 刻度错位）
+                    GeometryReader { geo in
+                        let width = max(1, geo.size.width)
+                        ZStack {
+                            ForEach([8, 12, 16, 20, 23], id: \.self) { hour in
+                                let ratio = CGFloat((Double(hour * 60) - 480.0) / 900.0)
+                                let xPos: CGFloat = hour == 8 ? 7 : (hour == 23 ? width - 7 : ratio * width)
+                                Text(String(format: "%02d", hour))
+                                    .font(.system(size: 9.5, design: .rounded))
+                                    .foregroundColor(Color(nsColor: .tertiaryLabelColor))
+                                    .monospacedDigit()
+                                    .position(x: xPos, y: geo.size.height / 2)
+                            }
                         }
                     }
+                    .frame(height: 12)
                 }
             }
             .padding(.horizontal, 12)
@@ -384,28 +399,28 @@ struct BreakStatsView: View {
                     }
                 }
 
-                HStack(alignment: .center, spacing: 6) {
-                    // 极简星期参考列
-                    VStack(spacing: 3) {
+                HStack(alignment: .center, spacing: 8) {
+                    // 极简星期参考列（与 15×15 热力方格等高对齐）
+                    VStack(spacing: 4) {
                         ForEach(0..<7, id: \.self) { row in
                             Text(row == 0 ? "一" : (row == 3 ? "四" : (row == 6 ? "日" : "")))
                                 .font(.system(size: 8.5))
                                 .foregroundColor(Color(nsColor: .tertiaryLabelColor))
-                                .frame(width: 11, height: 11)
+                                .frame(width: 11, height: 15)
                         }
                     }
 
-                    // 16 列 × 7 行微圆角方格
-                    HStack(spacing: 3.5) {
+                    // 16 列 × 7 行正方形微圆角热力格（15×15pt，横纵间距统一 4pt）
+                    HStack(spacing: 4) {
                         ForEach(Array(weeks.enumerated()), id: \.offset) { _, col in
-                            VStack(spacing: 3) {
+                            VStack(spacing: 4) {
                                 ForEach(col) { bucket in
                                     let isToday = bucket.dayKey == todayKey
                                     let isHovered = hoveredHeatBucket?.id == bucket.id
-                                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
                                         .fill(heatColor(forCount: bucket.completedCount))
                                         .overlay(
-                                            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                                            RoundedRectangle(cornerRadius: 3, style: .continuous)
                                                 .stroke(
                                                     isHovered
                                                         ? Color(nsColor: .labelColor).opacity(0.65)
@@ -413,8 +428,7 @@ struct BreakStatsView: View {
                                                     lineWidth: isHovered ? 1.0 : 0.8
                                                 )
                                         )
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 11)
+                                        .frame(width: 15, height: 15)
                                         .onHover { hovering in
                                             hoveredHeatBucket = hovering ? bucket : (hoveredHeatBucket?.id == bucket.id ? nil : hoveredHeatBucket)
                                         }
@@ -423,6 +437,7 @@ struct BreakStatsView: View {
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .center)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
@@ -457,16 +472,9 @@ struct BreakStatsView: View {
     }
 
     private func timelineRatio(for date: Date) -> CGFloat? {
-        let comps = Calendar.current.dateComponents([.hour, .minute], from: date)
-        let mins = Double((comps.hour ?? 0) * 60 + (comps.minute ?? 0))
-        guard mins >= 480 && mins <= 1380 else { return nil }
-        return CGFloat((mins - 480) / 900)
-    }
-
-    private func clampedTimelineRatio(for date: Date) -> CGFloat {
-        let comps = Calendar.current.dateComponents([.hour, .minute], from: date)
-        let mins = Double((comps.hour ?? 0) * 60 + (comps.minute ?? 0))
-        return CGFloat(min(1.0, max(0.0, (mins - 480) / 900)))
+        let ratio = BreakEventRecord.rawTimelineRatio(for: date)
+        guard ratio >= 0 && ratio <= 1 else { return nil }
+        return ratio
     }
 
     private func formatDuration(_ seconds: Int) -> String {
