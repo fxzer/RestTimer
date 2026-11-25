@@ -6,6 +6,7 @@ final class PreBreakHudViewModel: ObservableObject {
     @Published var title: String = ""
     @Published var subtitle: String = ""
     @Published var isWarningCap: Bool = false
+    @Published var countdownProgress: Double = 1.0
 }
 
 private struct PreBreakHudView: View {
@@ -13,26 +14,13 @@ private struct PreBreakHudView: View {
 
     var body: some View {
         let accent: Color = viewModel.isWarningCap ? .orange : Color.accentColor
-        HStack(spacing: 10) {
-            CapsuleAccentIconBadge(
-                systemName: viewModel.isWarningCap ? "exclamationmark" : "cup.and.saucer.fill",
-                accent: accent,
-                isPulsing: true
-            )
-
-            Text(viewModel.title)
-                .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                .foregroundColor(Color(nsColor: .labelColor))
-                .monospacedDigit()
-        }
-        .padding(.leading, 9)
-        .padding(.trailing, 20)
-        .padding(.vertical, 8)
-        .background(FrostedGlassCapsuleBackground(accent: accent))
-        .padding(.horizontal, 18)
-        .padding(.top, 10)
-        .padding(.bottom, 18)
-        .fixedSize()
+        FrostedHudCapsulePill(
+            iconKind: viewModel.isWarningCap
+                ? .warningCap(progress: viewModel.countdownProgress)
+                : .breakCountdown(progress: viewModel.countdownProgress),
+            title: viewModel.title,
+            accent: accent
+        )
     }
 }
 
@@ -46,6 +34,7 @@ final class PreBreakHudManager {
     private let viewModel = PreBreakHudViewModel()
     private var state: HudState = .hidden
     private var screenObserver: NSObjectProtocol?
+    private var idleTotalSeconds: Int = 3
     private let slideOffsetY: CGFloat = 16
 
     init() {
@@ -135,15 +124,21 @@ final class PreBreakHudManager {
     }
 
     private func updateViewModel(secondsLeft: Int, reason: CountdownReason) {
+        if case .hidden = state {
+            idleTotalSeconds = max(3, secondsLeft)
+        }
         switch reason {
         case .idleTrigger:
             viewModel.isWarningCap = false
             viewModel.title = "\(secondsLeft)秒后休息"
             viewModel.subtitle = ""
+            idleTotalSeconds = max(idleTotalSeconds, secondsLeft)
+            viewModel.countdownProgress = min(1.0, max(0.0, Double(secondsLeft) / Double(max(1, idleTotalSeconds))))
         case .maxDelayCap:
             viewModel.isWarningCap = true
             viewModel.title = "\(secondsLeft)秒后休息"
             viewModel.subtitle = ""
+            viewModel.countdownProgress = min(1.0, max(0.0, Double(secondsLeft) / BreakDelayEvaluator.maxCapWarningWindow))
         }
     }
 
@@ -154,7 +149,7 @@ final class PreBreakHudManager {
             let hostingController = NSHostingController(rootView: PreBreakHudView(viewModel: viewModel))
             hostingController.view.wantsLayer = true
             let fittingSize = hostingController.view.fittingSize
-            let size = NSSize(width: max(156, ceil(fittingSize.width)), height: max(56, ceil(fittingSize.height)))
+            let size = NSSize(width: max(136, ceil(fittingSize.width)), height: max(64, ceil(fittingSize.height)))
 
             let targetFrame = computeFrame(on: screen, size: size)
             let startFrame = animated
@@ -201,7 +196,7 @@ final class PreBreakHudManager {
             if let contentView = panel.contentViewController?.view {
                 contentView.layoutSubtreeIfNeeded()
                 let fittingSize = contentView.fittingSize
-                let size = NSSize(width: max(156, ceil(fittingSize.width)), height: max(56, ceil(fittingSize.height)))
+                let size = NSSize(width: max(136, ceil(fittingSize.width)), height: max(64, ceil(fittingSize.height)))
                 panel.setFrame(computeFrame(on: screen, size: size), display: true)
             }
         }

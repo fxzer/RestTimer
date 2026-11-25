@@ -34,6 +34,7 @@
 		C3A1B21C2D10000100A0A60D /* SettingsComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B21B2D10000100A0A60D /* SettingsComponents.swift */; };
 		C3A1B21E2D10000100A0A60D /* HeadphoneMediaResumeCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B21D2D10000100A0A60D /* HeadphoneMediaResumeCoordinator.swift */; };
 		C3A1B2202D10000100A0A60D /* BreakDisplaySession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B21F2D10000100A0A60D /* BreakDisplaySession.swift */; };
+		C3A1B2222D10000100A0A60D /* AnimatedHudIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B2212D10000100A0A60D /* AnimatedHudIcons.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -85,6 +86,7 @@
 		C3A1B21B2D10000100A0A60D /* SettingsComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsComponents.swift; sourceTree = "<group>"; };
 		C3A1B21D2D10000100A0A60D /* HeadphoneMediaResumeCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeadphoneMediaResumeCoordinator.swift; sourceTree = "<group>"; };
 		C3A1B21F2D10000100A0A60D /* BreakDisplaySession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakDisplaySession.swift; sourceTree = "<group>"; };
+		C3A1B2212D10000100A0A60D /* AnimatedHudIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedHudIcons.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -157,6 +159,7 @@
 				C3A1B21B2D10000100A0A60D /* SettingsComponents.swift */,
 				C3A1B21D2D10000100A0A60D /* HeadphoneMediaResumeCoordinator.swift */,
 				C3A1B21F2D10000100A0A60D /* BreakDisplaySession.swift */,
+				C3A1B2212D10000100A0A60D /* AnimatedHudIcons.swift */,
 				C3E3E3102D03F1F300A0A60D /* Assets.xcassets */,
 				C3E3E3122D03F1F300A0A60D /* RestTimer.entitlements */,
 				C3E3E3132D03F1F300A0A60D /* Preview Content */,
@@ -341,6 +344,7 @@
 				C3A1B21C2D10000100A0A60D /* SettingsComponents.swift in Sources */,
 				C3A1B21E2D10000100A0A60D /* HeadphoneMediaResumeCoordinator.swift in Sources */,
 				C3A1B2202D10000100A0A60D /* BreakDisplaySession.swift in Sources */,
+				C3A1B2222D10000100A0A60D /* AnimatedHudIcons.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -500,7 +504,7 @@
 				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = RestTimer/RestTimer.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 21;
 				DEVELOPMENT_ASSET_PATHS = "\"RestTimer/Preview Content\"";
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				ENABLE_PREVIEWS = YES;
@@ -519,7 +523,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.7;
-				MARKETING_VERSION = 1.5.6;
+				MARKETING_VERSION = 1.5.12;
 				PRODUCT_BUNDLE_IDENTIFIER = fxzer.top.RestTimer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -539,7 +543,7 @@
 				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = RestTimer/RestTimer.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 21;
 				DEVELOPMENT_ASSET_PATHS = "\"RestTimer/Preview Content\"";
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				ENABLE_PREVIEWS = YES;
@@ -558,7 +562,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.7;
-				MARKETING_VERSION = 1.5.6;
+				MARKETING_VERSION = 1.5.12;
 				PRODUCT_BUNDLE_IDENTIFIER = fxzer.top.RestTimer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -575,11 +579,11 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 21;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				MACOSX_DEPLOYMENT_TARGET = 13.7;
-				MARKETING_VERSION = 1.5.6;
+				MARKETING_VERSION = 1.5.12;
 				PRODUCT_BUNDLE_IDENTIFIER = fxzer.top.RestTimerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -597,11 +601,11 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 21;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				MACOSX_DEPLOYMENT_TARGET = 13.7;
-				MARKETING_VERSION = 1.5.6;
+				MARKETING_VERSION = 1.5.12;
 				PRODUCT_BUNDLE_IDENTIFIER = fxzer.top.RestTimerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -618,11 +622,11 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 21;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				MACOSX_DEPLOYMENT_TARGET = 13.7;
-				MARKETING_VERSION = 1.5.6;
+				MARKETING_VERSION = 1.5.12;
 				PRODUCT_BUNDLE_IDENTIFIER = fxzer.top.RestTimerUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -639,11 +643,11 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 21;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				MACOSX_DEPLOYMENT_TARGET = 13.7;
-				MARKETING_VERSION = 1.5.6;
+				MARKETING_VERSION = 1.5.12;
 				PRODUCT_BUNDLE_IDENTIFIER = fxzer.top.RestTimerUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;

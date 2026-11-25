@@ -16,12 +16,12 @@ private final class CapsuleVisualEffectView: NSVisualEffectView {
     }
 }
 
-/// 真实跨窗口毛玻璃材质（AppKit NSVisualEffectView behindWindow，自动适配亮暗模式）
+/// 真实跨窗口毛玻璃材质（AppKit NSVisualEffectView behindWindow，采用原生 .hudWindow 材质兼顾通透与对比度）
 struct BehindWindowFrostedGlass: NSViewRepresentable {
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = CapsuleVisualEffectView()
         view.blendingMode = .behindWindow
-        view.material = .popover
+        view.material = .hudWindow
         view.state = .active
         view.isEmphasized = true
         return view
@@ -29,14 +29,13 @@ struct BehindWindowFrostedGlass: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
         nsView.blendingMode = .behindWindow
-        nsView.material = .popover
+        nsView.material = .hudWindow
         nsView.state = .active
     }
 }
 
-/// LookAway 风格高识别毛玻璃胶囊背景（亮暗双态自适应 + 主题色微光描边 + 轻柔弥散阴影，不隐身也不突兀）
+/// 原生极简磨砂微胶囊背景（通透玻璃 + 单层 0.5pt 高光细边 + 柔和弥散阴影，去掉双层硬边）
 struct FrostedGlassCapsuleBackground: View {
-    var accent: Color = .accentColor
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -44,81 +43,61 @@ struct FrostedGlassCapsuleBackground: View {
         ZStack {
             BehindWindowFrostedGlass()
             Capsule()
-                .fill(isDark ? Color(nsColor: .windowBackgroundColor).opacity(0.38) : Color.white.opacity(0.56))
+                .fill(isDark ? Color.white.opacity(0.06) : Color.white.opacity(0.32))
         }
         .clipShape(Capsule())
         .overlay(
             Capsule()
-                .inset(by: 0.75)
-                .stroke(Color.white.opacity(isDark ? 0.24 : 0.78), lineWidth: 0.6)
-        )
-        .overlay(
-            Capsule()
-                .stroke(accent.opacity(isDark ? 0.42 : 0.32), lineWidth: 1.0)
+                .inset(by: 0.3)
+                .stroke(Color.white.opacity(isDark ? 0.22 : 0.78), lineWidth: 0.6)
         )
         .shadow(
-            color: Color.black.opacity(isDark ? 0.28 : 0.11),
-            radius: 10,
+            color: Color.black.opacity(isDark ? 0.42 : 0.14),
+            radius: 14,
             x: 0,
-            y: 4
+            y: 6
         )
     }
 }
 
-/// 胶囊左侧实心主题色圆标徽章（强视觉锚点，在纯白网页与深色终端上均一眼可见）
-struct CapsuleAccentIconBadge: View {
-    let systemName: String
-    let accent: Color
-    var isPulsing: Bool = false
-
-    @State private var pulseActive = false
+/// 统一共享的原生磨砂胶囊轻提示视图（通知提示与休息前倒数共用同一套醒目比例）
+struct FrostedHudCapsulePill: View {
+    let iconKind: HudIconKind
+    let title: String
+    var accent: Color = .accentColor
 
     var body: some View {
-        ZStack {
-            if isPulsing {
-                Circle()
-                    .stroke(accent.opacity(pulseActive ? 0.0 : 0.48), lineWidth: 2.0)
-                    .frame(width: 28, height: 28)
-                    .scaleEffect(pulseActive ? 1.42 : 1.0)
-                    .onAppear {
-                        withAnimation(.easeOut(duration: 1.0).repeatForever(autoreverses: false)) {
-                            pulseActive = true
-                        }
-                    }
-            }
+        HStack(spacing: 9) {
+            CapsuleAccentIconBadge(
+                kind: iconKind,
+                accent: accent
+            )
 
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [accent, accent.opacity(0.78)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 28, height: 28)
-                .overlay(
-                    Circle()
-                        .inset(by: 0.5)
-                        .stroke(Color.white.opacity(0.28), lineWidth: 0.6)
-                )
-
-            Image(systemName: systemName)
-                .font(.system(size: 13.5, weight: .bold))
-                .foregroundColor(.white)
+            Text(title)
+                .font(.system(size: 14.5, weight: .semibold, design: .rounded))
+                .foregroundColor(Color(nsColor: .labelColor))
+                .monospacedDigit()
         }
-        .frame(width: 28, height: 28)
+        .padding(.leading, 14)
+        .padding(.trailing, 18)
+        .padding(.vertical, 9.5)
+        .background(FrostedGlassCapsuleBackground())
+        .padding(.horizontal, 18)
+        .padding(.top, 10)
+        .padding(.bottom, 18)
+        .fixedSize()
     }
 }
 
 private struct ToastCapsuleBannerView: View {
     let kind: ToastNotificationKind
 
-    private var iconName: String {
+    private var iconKind: HudIconKind {
         switch kind {
         case .workStarted:
-            return "clock.fill"
+            return .focusStart
         case .earlyWarning:
-            return "bell.fill"
+            return .bellReminder
         }
     }
 
@@ -138,22 +117,11 @@ private struct ToastCapsuleBannerView: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
-            CapsuleAccentIconBadge(systemName: iconName, accent: Color.accentColor)
-
-            Text(titleText)
-                .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                .foregroundColor(Color(nsColor: .labelColor))
-                .monospacedDigit()
-        }
-        .padding(.leading, 9)
-        .padding(.trailing, 20)
-        .padding(.vertical, 8)
-        .background(FrostedGlassCapsuleBackground(accent: Color.accentColor))
-        .padding(.horizontal, 18)
-        .padding(.top, 10)
-        .padding(.bottom, 18)
-        .fixedSize()
+        FrostedHudCapsulePill(
+            iconKind: iconKind,
+            title: titleText,
+            accent: Color.accentColor
+        )
     }
 }
 
@@ -258,7 +226,7 @@ final class NotificationOverlayManager {
         let hostingController = NSHostingController(rootView: ToastCapsuleBannerView(kind: kind))
         hostingController.view.wantsLayer = true
         let fitting = hostingController.view.fittingSize
-        let contentSize = NSSize(width: max(150, ceil(fitting.width)), height: max(56, ceil(fitting.height)))
+        let contentSize = NSSize(width: max(136, ceil(fitting.width)), height: max(64, ceil(fitting.height)))
 
         let visibleFrame = screen.visibleFrame
         let originX = visibleFrame.midX - contentSize.width / 2

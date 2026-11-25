@@ -898,4 +898,32 @@ final class RestTimerTests: XCTestCase {
         XCTAssertEqual(BreakEventRecord.nearestEvent(atX: eveningX, width: trackWidth, events: events)?.id, events[2].id)
         XCTAssertNil(BreakEventRecord.nearestEvent(atX: (morningX + afternoonX) / 2, width: trackWidth, events: events))
     }
+
+    func testBreakViewRendersCleanlyInDesktopLayout() {
+        let session = BreakDisplaySession()
+        session.prepareSession(totalBreakSeconds: 120, themeSetting: .slateIce)
+
+        let breakHosting = NSHostingView(
+            rootView: BreakView(session: session)
+                .environmentObject(TimerManager.shared)
+                .frame(width: 1200, height: 800)
+        )
+        breakHosting.layoutSubtreeIfNeeded()
+        XCTAssertGreaterThanOrEqual(breakHosting.fittingSize.width, 1200)
+
+        for (iconKind, title) in [
+            (HudIconKind.focusStart, "开始专注"),
+            (HudIconKind.bellReminder, "2分后休息"),
+            (HudIconKind.breakCountdown(progress: 0.6), "3秒后休息"),
+            (HudIconKind.warningCap(progress: 0.3), "5秒后休息")
+        ] {
+            let hudHosting = NSHostingView(
+                rootView: FrostedHudCapsulePill(iconKind: iconKind, title: title)
+            )
+            hudHosting.layoutSubtreeIfNeeded()
+            // 含上下 10+18pt 阴影留白，整体高度应在 64-74pt（胶囊本体约 41pt，兼顾醒目度与比例）
+            XCTAssertGreaterThanOrEqual(hudHosting.fittingSize.height, 64.0)
+            XCTAssertLessThanOrEqual(hudHosting.fittingSize.height, 74.0)
+        }
+    }
 }
