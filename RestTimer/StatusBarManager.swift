@@ -106,7 +106,7 @@ final class StatusBarManager: NSObject, ObservableObject {
 
         menu.addItem(NSMenuItem.separator())
 
-        // 2. 应用设置与信息组
+        // 2. 应用设置
         let settingsItem = NSMenuItem(
             title: "设置",
             action: #selector(showSettings),
@@ -114,14 +114,6 @@ final class StatusBarManager: NSObject, ObservableObject {
         )
         settingsItem.target = self
         menu.addItem(settingsItem)
-
-        let aboutItem = NSMenuItem(
-            title: "关于",
-            action: #selector(showAbout),
-            keyEquivalent: ""
-        )
-        aboutItem.target = self
-        menu.addItem(aboutItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -303,30 +295,6 @@ final class StatusBarManager: NSObject, ObservableObject {
         let minutes = totalSeconds / 60
         let seconds = totalSeconds % 60
         return String(format: "%02d:%02d", minutes, seconds)
-    }
-
-    @objc private func showAbout() {
-        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1.1"
-        let alert = NSAlert()
-        alert.messageText = "Rest Timer"
-        alert.informativeText = """
-            版本: \(appVersion)
-            开发者: fxzer
-
-            一个简单的工作休息提醒工具
-            帮助你保持健康的工作节奏
-            """
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "确定")
-
-        if let window = NSApp.keyWindow {
-            alert.beginSheetModal(for: window) { _ in }
-        } else {
-            DispatchQueue.main.async {
-                NSApp.activate(ignoringOtherApps: true)
-                alert.runModal()
-            }
-        }
     }
 
     @objc private func showSettings() {

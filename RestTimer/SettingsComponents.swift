@@ -5,8 +5,8 @@ import AppKit
 
 enum SettingsTokens {
     static let windowWidth: CGFloat = 380
-    static let tabContentHeight: CGFloat = 376
-    static let windowHeight: CGFloat = 436
+    static let tabContentHeight: CGFloat = 385
+    static let windowHeight: CGFloat = 445
 
     static let cardCornerRadius: CGFloat = 12
     static let cornerRadius: CGFloat = 8
@@ -101,5 +101,98 @@ struct SettingsPillButton: View {
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
+    }
+}
+
+/// 设置页「关于」Tab 视图
+struct SettingsAboutView: View {
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.6"
+    }
+
+    private var appBuild: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "-"
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            SettingsCardContainer {
+                VStack(spacing: 8) {
+                    if let icon = NSApplication.shared.applicationIconImage {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 52, height: 52)
+                    }
+
+                    Text("Rest Timer")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+
+                    Text("版本 \(appVersion) (Build \(appBuild))")
+                        .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                        .foregroundColor(Color(nsColor: .secondaryLabelColor))
+
+                    Text("一个简单的工作休息提醒工具，帮助你保持健康的工作节奏")
+                        .font(.system(size: 11.5))
+                        .foregroundColor(Color(nsColor: .secondaryLabelColor))
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 14)
+            }
+
+            SettingsCardContainer {
+                aboutInfoRow(title: "开发者", value: "fxzer")
+
+                SettingsHairlineDivider()
+
+                Button {
+                    if let url = URL(string: "https://github.com/fxzer/RestTimer") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    HStack {
+                        Text("开源主页")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color(nsColor: .labelColor))
+                        Spacer()
+                        HStack(spacing: 4) {
+                            Text("github.com/fxzer/RestTimer")
+                                .font(.system(size: 11.5))
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        .foregroundColor(Color.accentColor)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            SettingsCardContainer {
+                aboutInfoRow(title: "切换拉伸动作 / 部位", value: "← → / Tab")
+                SettingsHairlineDivider()
+                aboutInfoRow(title: "切换静谧呼吸模式", value: "M")
+                SettingsHairlineDivider()
+                aboutInfoRow(title: "紧急退出全屏休息", value: "⌘⇧Esc 或连按 3 次 Esc")
+            }
+        }
+    }
+
+    private func aboutInfoRow(title: String, value: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Color(nsColor: .labelColor))
+            Spacer()
+            Text(value)
+                .font(.system(size: 11.5, design: .monospaced))
+                .foregroundColor(Color(nsColor: .secondaryLabelColor))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 }

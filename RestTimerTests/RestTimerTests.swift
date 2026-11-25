@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import RestTimer
 
 private final class MockActivitySampler: ActivitySampling {
@@ -98,7 +99,7 @@ final class RestTimerTests: XCTestCase {
             idleDelaySeconds: 10,
             maxDelayMinutes: 5,
             showPreBreakCountdown: true,
-            autoResetOnIdle: true
+            idleResetMinutes: 10
         )
 
         let waiting = BreakDelayEvaluator.evaluatePendingBreak(overdue: 20, idleElapsed: 2, config: config)
@@ -122,7 +123,7 @@ final class RestTimerTests: XCTestCase {
             idleDelaySeconds: 10,
             maxDelayMinutes: 5,
             showPreBreakCountdown: true,
-            autoResetOnIdle: true
+            idleResetMinutes: 10
         )
 
         let capWarning = BreakDelayEvaluator.evaluatePendingBreak(overdue: 288, idleElapsed: 0.2, config: config)
@@ -138,21 +139,81 @@ final class RestTimerTests: XCTestCase {
     }
 
     func testAutoResetOnNaturalAway() {
+        // 刚重置完前 10 秒不触发
         XCTAssertFalse(
             BreakDelayEvaluator.shouldEnterAwayState(
                 elapsedWork: 5,
-                idleElapsed: 400,
-                breakDuration: 300,
-                autoResetEnabled: true
+                idleElapsed: 700,
+                idleResetDuration: 600
             )
         )
 
+        // 坐着玩 3 分钟手机（小于 10 分钟重计阈值）：绝不清零，防止漏掉久坐提醒
+        XCTAssertFalse(
+            BreakDelayEvaluator.shouldEnterAwayState(
+                elapsedWork: 1500,
+                idleElapsed: 180,
+                idleResetDuration: 600
+            )
+        )
+
+        // 达到 10 分钟真正长时间无操作：进入离开态
         XCTAssertTrue(
             BreakDelayEvaluator.shouldEnterAwayState(
-                elapsedWork: 360,
-                idleElapsed: 300,
-                breakDuration: 300,
-                autoResetEnabled: true
+                elapsedWork: 1500,
+                idleElapsed: 600,
+                idleResetDuration: 600
+            )
+        )
+
+        // 设置为「关闭」（nil）时，不锁屏空闲永不自动重计
+        XCTAssertFalse(
+            BreakDelayEvaluator.shouldEnterAwayState(
+                elapsedWork: 1500,
+                idleElapsed: 3600,
+                idleResetDuration: nil
+            )
+        )
+
+        // 息屏与锁屏分级回归判定
+        XCTAssertFalse(
+            BreakDelayEvaluator.shouldResetOnSystemReturn(
+                inactiveElapsed: 180,
+                wasLocked: false,
+                breakDuration: 120,
+                idleResetDuration: 600
+            )
+        )
+        XCTAssertTrue(
+            BreakDelayEvaluator.shouldResetOnSystemReturn(
+                inactiveElapsed: 600,
+                wasLocked: false,
+                breakDuration: 120,
+                idleResetDuration: 600
+            )
+        )
+        XCTAssertFalse(
+            BreakDelayEvaluator.shouldResetOnSystemReturn(
+                inactiveElapsed: 3600,
+                wasLocked: false,
+                breakDuration: 120,
+                idleResetDuration: nil
+            )
+        )
+        XCTAssertFalse(
+            BreakDelayEvaluator.shouldResetOnSystemReturn(
+                inactiveElapsed: 30,
+                wasLocked: true,
+                breakDuration: 120,
+                idleResetDuration: 600
+            )
+        )
+        XCTAssertTrue(
+            BreakDelayEvaluator.shouldResetOnSystemReturn(
+                inactiveElapsed: 120,
+                wasLocked: true,
+                breakDuration: 120,
+                idleResetDuration: 600
             )
         )
 
@@ -164,19 +225,19 @@ final class RestTimerTests: XCTestCase {
         var tracker = ScreenPresenceTracker()
 
         // 锁屏 -> 息屏：只触发一次暂停
-        XCTAssertEqual(tracker.handleScreenLocked(), .pauseForSystemLock)
-        XCTAssertEqual(tracker.handleScreenSlept(), .none)
+        XCTAssertEqual(tracker.handleScreenLocked(at: 100), .pauseForSystemLock)
+        XCTAssertEqual(tracker.handleScreenSlept(at: 110), .none)
 
-        // 亮屏但仍在锁屏密码页：不提前重置
-        XCTAssertEqual(tracker.handleScreenWoke(), .none)
+        // 亮屏但仍在锁屏密码页：不提前结束挂起
+        XCTAssertEqual(tracker.handleScreenWoke(at: 250), .none)
 
-        // 真正解锁：触发一次重置，重复解锁不再触发
-        XCTAssertEqual(tracker.handleScreenUnlocked(), .resetOnSystemUnlock)
-        XCTAssertEqual(tracker.handleScreenUnlocked(), .none)
+        // 真正解锁：按最早离线时间计算累计时长并标记为锁屏过
+        XCTAssertEqual(tracker.handleScreenUnlocked(at: 280), .endSystemInactivity(elapsed: 180, wasLocked: true))
+        XCTAssertEqual(tracker.handleScreenUnlocked(at: 285), .none)
 
-        // 纯息屏未锁屏：唤醒时应正常重置
-        XCTAssertEqual(tracker.handleScreenSlept(), .pauseForSystemLock)
-        XCTAssertEqual(tracker.handleScreenWoke(), .resetOnSystemUnlock)
+        // 纯息屏未锁屏：唤醒时标记 wasLocked = false
+        XCTAssertEqual(tracker.handleScreenSlept(at: 400), .pauseForSystemLock)
+        XCTAssertEqual(tracker.handleScreenWoke(at: 520), .endSystemInactivity(elapsed: 120, wasLocked: false))
     }
 
     func testTimerManagerManualPauseSurvivesSystemLockUnlock() {
@@ -192,23 +253,42 @@ final class RestTimerTests: XCTestCase {
         manager.handleSystemLock()
         XCTAssertEqual(manager.state.pauseReason, .manual)
 
-        manager.handleSystemUnlock()
+        manager.handleSystemUnlock(inactiveElapsed: 600, wasLocked: true)
         XCTAssertTrue(manager.isPaused)
         XCTAssertEqual(manager.state.pauseReason, .manual)
 
-        // 恢复后改为工作态，此时系统锁屏并解锁应自动重置回工作态
+        // 恢复后改为工作态；先推进 0.25s，再验证未锁屏短息屏与短时误锁会保留原进度而非重开一轮
         manager.toggleManualPause()
         XCTAssertFalse(manager.isPaused)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.25))
 
         manager.handleSystemLock()
         XCTAssertEqual(manager.state.pauseReason, .systemLocked)
-
-        manager.handleSystemUnlock()
+        manager.handleSystemUnlock(inactiveElapsed: 180, wasLocked: false)
         XCTAssertFalse(manager.isPaused)
-        if case .working = manager.state {
-            // expected
+        if case .working(let startedAfterShortSleep) = manager.state {
+            XCTAssertGreaterThanOrEqual(Date().timeIntervalSince1970 - startedAfterShortSleep, 0.20)
         } else {
-            XCTFail("Expected .working after system unlock, got \(manager.state)")
+            XCTFail("Expected .working after short screen wake, got \(manager.state)")
+        }
+
+        manager.handleSystemLock()
+        manager.handleSystemUnlock(inactiveElapsed: 30, wasLocked: true)
+        XCTAssertFalse(manager.isPaused)
+        if case .working(let startedAfterShortLock) = manager.state {
+            XCTAssertGreaterThanOrEqual(Date().timeIntervalSince1970 - startedAfterShortLock, 0.20)
+        } else {
+            XCTFail("Expected .working after short unlock, got \(manager.state)")
+        }
+
+        // 真锁屏超过休息时长（>= 120s）才重置为新一轮工作态
+        manager.handleSystemLock()
+        manager.handleSystemUnlock(inactiveElapsed: manager.breakDuration, wasLocked: true)
+        XCTAssertFalse(manager.isPaused)
+        if case .working(let startedAt) = manager.state {
+            XCTAssertLessThan(Date().timeIntervalSince1970 - startedAt, 0.1)
+        } else {
+            XCTFail("Expected .working after long system unlock, got \(manager.state)")
         }
     }
 
@@ -327,7 +407,7 @@ final class RestTimerTests: XCTestCase {
         XCTAssertEqual(decoded.idleDelaySeconds, 10)
         XCTAssertEqual(decoded.maxDelayMinutes, 5)
         XCTAssertEqual(decoded.showPreBreakCountdown, true)
-        XCTAssertEqual(decoded.autoResetOnIdle, true)
+        XCTAssertEqual(decoded.idleResetMinutes, 10)
         XCTAssertEqual(decoded.dndOnMeetingOrCall, true)
         XCTAssertEqual(decoded.dndOnFullscreenMedia, true)
         XCTAssertEqual(decoded.pauseMediaOnBreak, true)
@@ -339,6 +419,42 @@ final class RestTimerTests: XCTestCase {
         XCTAssertEqual(TimerSettings.default.workDurationMinutes, 30)
         XCTAssertEqual(TimerSettings.default.earlyNotifyMinutes, 2)
         XCTAssertEqual(TimerSettings.default.breakDurationMinutes, 2)
+
+        // 历史已移除主题（如 warmIvory）应平滑回退至 autoDayNight，防止整份设置丢失
+        let removedThemeJSON = """
+        {
+            "showSkipButton": true,
+            "showDockIcon": true,
+            "workDurationMinutes": 25,
+            "workDurationSeconds": 0,
+            "breakDurationMinutes": 3,
+            "breakDurationSeconds": 0,
+            "earlyNotifyMinutes": 1,
+            "earlyNotifySeconds": 0,
+            "breakGradientTheme": "warmIvory"
+        }
+        """.data(using: .utf8)!
+        let fallbackDecoded = try JSONDecoder().decode(TimerSettings.self, from: removedThemeJSON)
+        XCTAssertEqual(fallbackDecoded.workDurationMinutes, 25)
+        XCTAssertEqual(fallbackDecoded.breakGradientTheme, .autoDayNight)
+        XCTAssertEqual(fallbackDecoded.idleResetMinutes, 10)
+
+        // 旧版 autoResetOnIdle = false 应平滑迁移为 idleResetMinutes = 0（关闭）
+        let legacyDisabledAutoResetJSON = """
+        {
+            "showSkipButton": false,
+            "showDockIcon": true,
+            "workDurationMinutes": 30,
+            "workDurationSeconds": 0,
+            "breakDurationMinutes": 2,
+            "breakDurationSeconds": 0,
+            "earlyNotifyMinutes": 2,
+            "earlyNotifySeconds": 0,
+            "autoResetOnIdle": false
+        }
+        """.data(using: .utf8)!
+        let migratedDisabled = try JSONDecoder().decode(TimerSettings.self, from: legacyDisabledAutoResetJSON)
+        XCTAssertEqual(migratedDisabled.idleResetMinutes, 0)
     }
 
     func testBreakPreviewRestoresWorkTimerWithoutReset() {
@@ -386,6 +502,7 @@ final class RestTimerTests: XCTestCase {
     }
 
     func testCuratedQuoteLibraryProvidesSixtyUniqueQuotesWithNonRepeatingBag() {
+        CuratedQuoteLibrary.resetBag()
         XCTAssertEqual(CuratedQuoteLibrary.all.count, 60)
         XCTAssertEqual(Set(CuratedQuoteLibrary.all.map(\.text)).count, 60)
 
@@ -593,5 +710,192 @@ final class RestTimerTests: XCTestCase {
         coordinator.recordBreakStarted(mediaWasPaused: true)
         coordinator.reset()
         XCTAssertEqual(coordinator.state, .idle)
+    }
+
+    func testBreakDisplaySessionSharesSingleStateAndAdvancesDeterministically() {
+        let session = BreakDisplaySession()
+
+        session.prepareSession(totalBreakSeconds: 120, themeSetting: .autoDayNight)
+        let firstTheme = session.displayedTheme
+        XCTAssertEqual(firstTheme, BreakGradientTheme.concreteThemes[0])
+        XCTAssertFalse(session.routine.isEmpty)
+        XCTAssertFalse(session.hasManualSwitch)
+        let firstExercise = session.currentExercise(totalBreakSeconds: 120, elapsedSeconds: 0)
+        XCTAssertEqual(firstExercise?.id, session.routine.first?.id)
+
+        // 下一次会话仅轮换一次主题，而非按显示器数量递增
+        session.prepareSession(totalBreakSeconds: 120, themeSetting: .autoDayNight)
+        XCTAssertEqual(session.displayedTheme, BreakGradientTheme.concreteThemes[1])
+
+        // 显式切主题、切名言、切动作均作用于同一个共享会话
+        session.selectTheme(.midnightViolet)
+        XCTAssertEqual(session.displayedTheme, .midnightViolet)
+
+        let quoteBefore = session.currentQuote
+        session.advanceQuote()
+        XCTAssertNotEqual(session.currentQuote, quoteBefore)
+
+        let beforeStep = session.currentExercise(totalBreakSeconds: 120, elapsedSeconds: 0)
+        session.stepCatalog(by: 1, totalBreakSeconds: 120, elapsedSeconds: 0)
+        XCTAssertTrue(session.hasManualSwitch)
+        let afterStep = session.currentExercise(totalBreakSeconds: 120, elapsedSeconds: 0)
+        XCTAssertNotEqual(afterStep?.id, beforeStep?.id)
+
+        session.jumpToNextCategory(totalBreakSeconds: 120, elapsedSeconds: 0)
+        let afterCategory = session.currentExercise(totalBreakSeconds: 120, elapsedSeconds: 0)
+        XCTAssertNotEqual(afterCategory?.category, afterStep?.category)
+    }
+
+    func testBreakWindowManagerPreservesSessionOnScreenChangeAndSingleKeyHandling() {
+        let windowManager = BreakWindowManager()
+        let manager = TimerManager(
+            activityMonitor: ActivityMonitor(sampler: MockActivitySampler()),
+            breakWindowManager: windowManager,
+            autoStart: false
+        )
+        manager.settings.breakGradientTheme = .autoDayNight
+        manager.settings.enableBreakExerciseGuide = true
+        manager.settings.pauseMediaOnBreak = false
+
+        manager.startBreakImmediately()
+        defer { manager.emergencyExitBreak() }
+
+        let initialQuote = windowManager.displaySession.currentQuote
+        let initialTheme = windowManager.displaySession.displayedTheme
+        let initialRoutine = windowManager.displaySession.routine
+
+        // 模拟外接显示器插拔重建窗口：同一轮休息内不应重新抽取名言、主题或动作
+        windowManager.handleScreenParametersChanged()
+        XCTAssertEqual(windowManager.displaySession.currentQuote, initialQuote)
+        XCTAssertEqual(windowManager.displaySession.displayedTheme, initialTheme)
+        XCTAssertEqual(windowManager.displaySession.routine, initialRoutine)
+
+        // 键盘事件由 BreakWindowManager 单一处理：按一次右方向键只切一招，按一次 M 只切换一次模式
+        if let rightArrow = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: "",
+            charactersIgnoringModifiers: "",
+            isARepeat: false,
+            keyCode: 124
+        ) {
+            let expectedNext = (windowManager.displaySession.catalogIndex + 1) % StretchRoutinePlanner.catalog.count
+            XCTAssertNil(windowManager.handleKeyDown(rightArrow, timerManager: manager))
+            XCTAssertTrue(windowManager.displaySession.hasManualSwitch)
+            XCTAssertEqual(windowManager.displaySession.catalogIndex, expectedNext)
+        } else {
+            XCTFail("Failed to construct keyDown event")
+        }
+
+        if let toggleGuide = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: "m",
+            charactersIgnoringModifiers: "m",
+            isARepeat: false,
+            keyCode: 46
+        ) {
+            XCTAssertNil(windowManager.handleKeyDown(toggleGuide, timerManager: manager))
+            XCTAssertFalse(manager.settings.enableBreakExerciseGuide)
+        } else {
+            XCTFail("Failed to construct M keyDown event")
+        }
+    }
+
+    func testBreakThemeVisualSpecKeepsFrostedStaticAndAnimatesAllOtherThemes() {
+        XCTAssertEqual(BreakGradientTheme.concreteThemes.count, 12)
+        XCTAssertTrue(BreakGradientTheme.frostedGlass.isFrostedDesktop)
+        XCTAssertEqual(BreakGradientTheme.frostedGlass.visualSpec.orbOpacities.primary, 0.0)
+
+        for theme in BreakGradientTheme.concreteThemes {
+            XCTAssertEqual(theme.displayName.count, 3, "\(theme.displayName) should have 3 characters")
+            if !theme.isFrostedDesktop {
+                let spec = theme.visualSpec
+                XCTAssertGreaterThan(spec.orbOpacities.primary, 0.20, "\(theme.displayName) primary orb should be visible")
+                XCTAssertGreaterThan(spec.orbOpacities.secondary, 0.15, "\(theme.displayName) secondary orb should be visible")
+                XCTAssertGreaterThan(spec.orbOpacities.tertiary, 0.15, "\(theme.displayName) tertiary orb should be visible")
+                XCTAssertNotEqual(spec.orb1, spec.orb2, "\(theme.displayName) should use dual-tone contrast")
+            }
+        }
+
+        // 确保预览卡片的背景光团不会撑高卡片容器，12 个主题在 4 列宽度下全部锁定在 48pt 高度内
+        for theme in BreakGradientTheme.concreteThemes {
+            let hosting = NSHostingView(
+                rootView: BreakThemePreviewCardView(theme: theme, isSelected: true, action: {})
+                    .frame(width: 78)
+            )
+            hosting.layoutSubtreeIfNeeded()
+            XCTAssertEqual(hosting.fittingSize.height, 48.0, accuracy: 0.5, "\(theme.displayName) preview card should stay 48pt tall")
+        }
+
+        // 确保设置窗口布局及「关于」Tab 在固定尺寸 380×436 内不撑破
+        let settingsHosting = NSHostingView(
+            rootView: SettingsView().environmentObject(TimerManager.shared)
+        )
+        settingsHosting.layoutSubtreeIfNeeded()
+        XCTAssertLessThanOrEqual(settingsHosting.fittingSize.width, SettingsTokens.windowWidth + 0.5)
+        XCTAssertLessThanOrEqual(settingsHosting.fittingSize.height, SettingsTokens.windowHeight + 0.5)
+
+        let aboutHosting = NSHostingView(
+            rootView: SettingsAboutView().frame(width: SettingsTokens.windowWidth - 28)
+        )
+        aboutHosting.layoutSubtreeIfNeeded()
+        XCTAssertLessThanOrEqual(aboutHosting.fittingSize.height, SettingsTokens.tabContentHeight + 0.5)
+
+        let statsHosting = NSHostingView(
+            rootView: BreakStatsView()
+                .environmentObject(TimerManager.shared)
+                .frame(width: SettingsTokens.windowWidth - 28)
+        )
+        statsHosting.layoutSubtreeIfNeeded()
+        XCTAssertLessThanOrEqual(statsHosting.fittingSize.height, SettingsTokens.tabContentHeight + 0.5)
+    }
+
+    func testArcKnobOffsetInterpolatesStrictlyAlongCircularArc() {
+        var modifier = ArcKnobOffset(progress: 20.0 / 60.0, radius: 74.0)
+        XCTAssertEqual(modifier.animatableData, 20.0 / 60.0, accuracy: 0.0001)
+        modifier.animatableData = 45.0 / 60.0
+        XCTAssertEqual(modifier.progress, 45.0 / 60.0, accuracy: 0.0001)
+
+        // 从 20 分到 45 分插值任意中间帧，半径应始终锁定在 74pt 圆周上（而非直线弦穿心）
+        for step in 0...20 {
+            let p = (20.0 / 60.0) + (25.0 / 60.0) * (Double(step) / 20.0)
+            let pt = ArcKnobOffset.point(progress: p, radius: 74.0)
+            XCTAssertEqual(hypot(pt.x, pt.y), 74.0, accuracy: 0.001)
+        }
+    }
+
+    func testTodayRhythmNearestEventSelectsEachBarIndependently() {
+        var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        comps.hour = 10; comps.minute = 0
+        let morning = Calendar.current.date(from: comps)!
+        comps.hour = 16; comps.minute = 30
+        let afternoon = Calendar.current.date(from: comps)!
+        comps.hour = 19; comps.minute = 47
+        let evening = Calendar.current.date(from: comps)!
+
+        let events = [
+            BreakEventRecord(timestamp: morning.timeIntervalSince1970, breakSeconds: 120, focusSeconds: 1800, wasSkipped: false),
+            BreakEventRecord(timestamp: afternoon.timeIntervalSince1970, breakSeconds: 120, focusSeconds: 1800, wasSkipped: false),
+            BreakEventRecord(timestamp: evening.timeIntervalSince1970, breakSeconds: 120, focusSeconds: 1800, wasSkipped: false)
+        ]
+
+        let trackWidth: CGFloat = 328
+        let morningX = BreakEventRecord.xPosition(for: events[0].timestamp, width: trackWidth)
+        let afternoonX = BreakEventRecord.xPosition(for: events[1].timestamp, width: trackWidth)
+        let eveningX = BreakEventRecord.xPosition(for: events[2].timestamp, width: trackWidth)
+
+        XCTAssertEqual(BreakEventRecord.nearestEvent(atX: morningX, width: trackWidth, events: events)?.id, events[0].id)
+        XCTAssertEqual(BreakEventRecord.nearestEvent(atX: afternoonX + 3, width: trackWidth, events: events)?.id, events[1].id)
+        XCTAssertEqual(BreakEventRecord.nearestEvent(atX: eveningX, width: trackWidth, events: events)?.id, events[2].id)
+        XCTAssertNil(BreakEventRecord.nearestEvent(atX: (morningX + afternoonX) / 2, width: trackWidth, events: events))
     }
 }

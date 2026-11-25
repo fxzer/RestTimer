@@ -6,6 +6,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
     case smartDelay = "防打断"
     case appearanceAndGeneral = "通用"
     case statistics = "统计"
+    case about = "关于"
 
     var id: String { rawValue }
 
@@ -19,6 +20,8 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
             return "gearshape"
         case .statistics:
             return "chart.bar"
+        case .about:
+            return "info.circle"
         }
     }
 }
@@ -65,6 +68,8 @@ struct SettingsView: View {
                     appearanceAndGeneralTab.transition(.opacity)
                 case .statistics:
                     BreakStatsView().transition(.opacity)
+                case .about:
+                    SettingsAboutView().transition(.opacity)
                 }
             }
             .frame(height: SettingsTokens.tabContentHeight, alignment: .top)
@@ -325,6 +330,35 @@ struct SettingsView: View {
             }
 
             SettingsCardContainer {
+                HStack(spacing: 8) {
+                    Image(systemName: "figure.walk")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Color.accentColor)
+                        .frame(width: 18)
+
+                    Text("闲置重计")
+                        .font(.system(size: 12, weight: .medium))
+                        .fixedSize(horizontal: true, vertical: false)
+
+                    Spacer(minLength: 4)
+
+                    HStack(spacing: 4) {
+                        ForEach([(0, "关闭"), (5, "5分"), (10, "10分"), (15, "15分"), (30, "30分")], id: \.0) { minutes, label in
+                            SettingsPillButton(
+                                title: label,
+                                isSelected: timerManager.settings.idleResetMinutes == minutes
+                            ) {
+                                timerManager.settings.idleResetMinutes = minutes
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .help("连续无键鼠操作达到此时长后回归将重新计时；短时看手机、息屏唤醒与误锁不会清零")
+            }
+
+            SettingsCardContainer {
                 settingsToggleRow(
                     icon: "video.slash",
                     title: "会议/通话免打扰",
@@ -422,8 +456,8 @@ struct SettingsView: View {
                         .frame(width: 68)
                     }
 
-                    // 3 列 × 3 行矩形可视化主题预览矩阵（极淡静音系 -> 柔和护眼系 -> 静谧深色系）
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 3), spacing: 7) {
+                    // 4 列 × 3 行矩形可视化主题预览矩阵（静音冷调系 -> 柔和护眼系 -> 静谧深色系）
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 7) {
                         ForEach(BreakGradientTheme.concreteThemes, id: \.self) { theme in
                             BreakThemePreviewCardView(theme: theme, isSelected: timerManager.settings.breakGradientTheme == theme) {
                                 timerManager.settings.breakGradientTheme = theme
