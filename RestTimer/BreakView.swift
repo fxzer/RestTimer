@@ -29,7 +29,7 @@ struct BreakView: View {
 
     var body: some View {
         ZStack {
-            // 1. 克制背景层（毛玻璃透出真实桌面 / 素宣白静态纸面 / 其余极缓低功耗微雾）
+            // 1. 克制背景层（毛玻璃透出真实桌面 / 其余极缓低功耗流光）
             AuroraMeshBackgroundView(theme: resolvedTheme)
                 .ignoresSafeArea()
                 .animation(.easeInOut(duration: 0.36), value: resolvedTheme)
