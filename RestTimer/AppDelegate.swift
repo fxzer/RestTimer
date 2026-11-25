@@ -60,8 +60,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 break
             case .pauseForSystemLock:
                 TimerManager.shared.handleSystemLock()
-            case .resetOnSystemUnlock:
-                TimerManager.shared.handleSystemUnlock()
+            case .endSystemInactivity(let elapsed, let wasLocked):
+                TimerManager.shared.handleSystemUnlock(inactiveElapsed: elapsed, wasLocked: wasLocked)
             }
         }
 

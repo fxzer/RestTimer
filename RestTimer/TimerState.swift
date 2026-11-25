@@ -83,46 +83,64 @@ enum SessionState: Equatable {
     }
 }
 
-/// 系统息屏 / 锁屏存在性追踪器：将 4 个系统通知收敛为无重复的状态流转
+/// 系统息屏 / 锁屏存在性追踪器：将 4 个系统通知收敛为无重复的状态流转，并记录离线时长与是否真锁屏
 struct ScreenPresenceTracker: Equatable {
     private(set) var isScreenLocked = false
     private(set) var isScreenAsleep = false
+    private(set) var inactiveSince: TimeInterval?
+    private(set) var wasLockedInInactiveWindow = false
 
     enum Action: Equatable {
         case none
         case pauseForSystemLock
-        case resetOnSystemUnlock
+        case endSystemInactivity(elapsed: TimeInterval, wasLocked: Bool)
     }
 
     var isInactive: Bool {
         isScreenLocked || isScreenAsleep
     }
 
-    mutating func handleScreenLocked() -> Action {
+    mutating func handleScreenLocked(at now: TimeInterval = Date().timeIntervalSince1970) -> Action {
         let wasInactive = isInactive
         isScreenLocked = true
+        wasLockedInInactiveWindow = true
+        if inactiveSince == nil {
+            inactiveSince = now
+        }
         return wasInactive ? .none : .pauseForSystemLock
     }
 
-    mutating func handleScreenSlept() -> Action {
+    mutating func handleScreenSlept(at now: TimeInterval = Date().timeIntervalSince1970) -> Action {
         let wasInactive = isInactive
         isScreenAsleep = true
+        if inactiveSince == nil {
+            inactiveSince = now
+        }
         return wasInactive ? .none : .pauseForSystemLock
     }
 
-    mutating func handleScreenWoke() -> Action {
+    mutating func handleScreenWoke(at now: TimeInterval = Date().timeIntervalSince1970) -> Action {
         let wasInactive = isInactive
         isScreenAsleep = false
-        // 若仍处于锁屏密码页，等待真正解锁通知再重置
+        // 若仍处于锁屏密码页，等待真正解锁通知再结束挂起
         guard wasInactive && !isInactive else { return .none }
-        return .resetOnSystemUnlock
+        return finishInactivity(at: now)
     }
 
-    mutating func handleScreenUnlocked() -> Action {
+    mutating func handleScreenUnlocked(at now: TimeInterval = Date().timeIntervalSince1970) -> Action {
         let wasInactive = isInactive
         isScreenLocked = false
         isScreenAsleep = false
-        return wasInactive ? .resetOnSystemUnlock : .none
+        guard wasInactive else { return .none }
+        return finishInactivity(at: now)
+    }
+
+    private mutating func finishInactivity(at now: TimeInterval) -> Action {
+        let elapsed = max(0, now - (inactiveSince ?? now))
+        let wasLocked = wasLockedInInactiveWindow
+        inactiveSince = nil
+        wasLockedInInactiveWindow = false
+        return .endSystemInactivity(elapsed: elapsed, wasLocked: wasLocked)
     }
 }
 
@@ -168,7 +186,7 @@ struct TimerSettings: Codable, Equatable {
     var idleDelaySeconds: Int = 10
     var maxDelayMinutes: Int = 5
     var showPreBreakCountdown: Bool = true
-    var autoResetOnIdle: Bool = true
+    var idleResetMinutes: Int = 10
     var dndOnMeetingOrCall: Bool = true
     var dndOnFullscreenMedia: Bool = true
     var pauseMediaOnBreak: Bool = true
@@ -191,7 +209,7 @@ struct TimerSettings: Codable, Equatable {
         idleDelaySeconds: 10,
         maxDelayMinutes: 5,
         showPreBreakCountdown: true,
-        autoResetOnIdle: true,
+        idleResetMinutes: 10,
         dndOnMeetingOrCall: true,
         dndOnFullscreenMedia: true,
         pauseMediaOnBreak: true,
@@ -215,7 +233,7 @@ struct TimerSettings: Codable, Equatable {
         idleDelaySeconds: Int = 10,
         maxDelayMinutes: Int = 5,
         showPreBreakCountdown: Bool = true,
-        autoResetOnIdle: Bool = true,
+        idleResetMinutes: Int = 10,
         dndOnMeetingOrCall: Bool = true,
         dndOnFullscreenMedia: Bool = true,
         pauseMediaOnBreak: Bool = true,
@@ -237,13 +255,17 @@ struct TimerSettings: Codable, Equatable {
         self.idleDelaySeconds = idleDelaySeconds
         self.maxDelayMinutes = maxDelayMinutes
         self.showPreBreakCountdown = showPreBreakCountdown
-        self.autoResetOnIdle = autoResetOnIdle
+        self.idleResetMinutes = idleResetMinutes
         self.dndOnMeetingOrCall = dndOnMeetingOrCall
         self.dndOnFullscreenMedia = dndOnFullscreenMedia
         self.pauseMediaOnBreak = pauseMediaOnBreak
         self.resumeMediaWithHeadphones = resumeMediaWithHeadphones
         self.enableBreakExerciseGuide = enableBreakExerciseGuide
         self.breakGradientTheme = breakGradientTheme
+    }
+
+    private enum LegacyCodingKeys: String, CodingKey {
+        case autoResetOnIdle
     }
 
     init(from decoder: Decoder) throws {
@@ -263,7 +285,13 @@ struct TimerSettings: Codable, Equatable {
         idleDelaySeconds = try container.decodeIfPresent(Int.self, forKey: .idleDelaySeconds) ?? fallback.idleDelaySeconds
         maxDelayMinutes = try container.decodeIfPresent(Int.self, forKey: .maxDelayMinutes) ?? fallback.maxDelayMinutes
         showPreBreakCountdown = try container.decodeIfPresent(Bool.self, forKey: .showPreBreakCountdown) ?? fallback.showPreBreakCountdown
-        autoResetOnIdle = try container.decodeIfPresent(Bool.self, forKey: .autoResetOnIdle) ?? fallback.autoResetOnIdle
+        if let decodedIdleReset = try container.decodeIfPresent(Int.self, forKey: .idleResetMinutes) {
+            idleResetMinutes = max(0, decodedIdleReset)
+        } else {
+            let legacyContainer = try decoder.container(keyedBy: LegacyCodingKeys.self)
+            let legacyAutoReset = try legacyContainer.decodeIfPresent(Bool.self, forKey: .autoResetOnIdle)
+            idleResetMinutes = (legacyAutoReset == false) ? 0 : fallback.idleResetMinutes
+        }
         dndOnMeetingOrCall = try container.decodeIfPresent(Bool.self, forKey: .dndOnMeetingOrCall) ?? fallback.dndOnMeetingOrCall
         dndOnFullscreenMedia = try container.decodeIfPresent(Bool.self, forKey: .dndOnFullscreenMedia) ?? fallback.dndOnFullscreenMedia
         pauseMediaOnBreak = try container.decodeIfPresent(Bool.self, forKey: .pauseMediaOnBreak) ?? fallback.pauseMediaOnBreak

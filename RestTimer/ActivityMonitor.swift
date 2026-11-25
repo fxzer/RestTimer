@@ -10,7 +10,7 @@ struct SmartDelayConfig: Equatable {
     var idleDelaySeconds: Int = 10
     var maxDelayMinutes: Int = 5 // 0 表示不限制
     var showPreBreakCountdown: Bool = true
-    var autoResetOnIdle: Bool = true
+    var idleResetMinutes: Int = 10 // 0 表示关闭
 
     var hasAnyMonitorEnabled: Bool {
         monitorKeyboard || monitorMouse
@@ -18,6 +18,10 @@ struct SmartDelayConfig: Equatable {
 
     var maxDelayDuration: TimeInterval? {
         maxDelayMinutes > 0 ? TimeInterval(maxDelayMinutes * 60) : nil
+    }
+
+    var idleResetDuration: TimeInterval? {
+        idleResetMinutes > 0 ? TimeInterval(idleResetMinutes * 60) : nil
     }
 }
 
@@ -213,21 +217,34 @@ enum BreakDelayEvaluator {
         )
     }
 
-    /// 判断专注期间是否因长时间离开电脑而应进入“自然离开”挂起状态
+    /// 判断专注期间是否因长时间离开电脑而应进入“自然离开”挂起状态（未达到重计阈值时绝不清零，防止刷手机误重置）
     static func shouldEnterAwayState(
         elapsedWork: TimeInterval,
         idleElapsed: TimeInterval,
-        breakDuration: TimeInterval,
-        autoResetEnabled: Bool
+        idleResetDuration: TimeInterval?
     ) -> Bool {
-        guard autoResetEnabled, breakDuration > 0 else { return false }
+        guard let resetThreshold = idleResetDuration, resetThreshold > 0 else { return false }
         // 至少专注超过 10 秒后才触发，避免刚重置完一直不动时反复重置
         guard elapsedWork >= 10 else { return false }
-        return idleElapsed >= breakDuration
+        return idleElapsed >= resetThreshold
     }
 
     /// 处于“自然离开”状态时，用户是否已回到电脑前操作
     static func shouldResumeFromAway(idleElapsed: TimeInterval) -> Bool {
         idleElapsed < 2.0
+    }
+
+    /// 锁屏解锁或息屏唤醒时，判定是否达到重开新一轮的条件（短时误锁与未锁屏短息屏均恢复原进度）
+    static func shouldResetOnSystemReturn(
+        inactiveElapsed: TimeInterval,
+        wasLocked: Bool,
+        breakDuration: TimeInterval,
+        idleResetDuration: TimeInterval?
+    ) -> Bool {
+        if wasLocked {
+            return breakDuration > 0 && inactiveElapsed >= breakDuration
+        }
+        guard let resetThreshold = idleResetDuration, resetThreshold > 0 else { return false }
+        return inactiveElapsed >= resetThreshold
     }
 }

@@ -31,7 +31,7 @@ internal final class TimerManager: ObservableObject {
     private let dailyStatsStore: DailyBreakStatsStore
     private let preBreakHud = PreBreakHudManager()
     private let toastOverlay = NotificationOverlayManager()
-    private let breakWindowManager = BreakWindowManager()
+    private let breakWindowManager: BreakWindowManager
 
     private var workTimer: Timer?
     private var earlyNotifyTimer: Timer?
@@ -93,8 +93,12 @@ internal final class TimerManager: ObservableObject {
             idleDelaySeconds: settings.idleDelaySeconds,
             maxDelayMinutes: settings.maxDelayMinutes,
             showPreBreakCountdown: settings.showPreBreakCountdown,
-            autoResetOnIdle: settings.autoResetOnIdle
+            idleResetMinutes: settings.idleResetMinutes
         )
+    }
+
+    var idleResetDuration: TimeInterval? {
+        settings.idleResetMinutes > 0 ? TimeInterval(settings.idleResetMinutes * 60) : nil
     }
 
     // MARK: - 初始化
@@ -103,11 +107,13 @@ internal final class TimerManager: ObservableObject {
         activityMonitor: ActivityMonitor = ActivityMonitor(),
         contextProvider: SmartContextProviding = SystemSmartContextProvider(),
         dailyStatsStore: DailyBreakStatsStore = DailyBreakStatsStore(),
+        breakWindowManager: BreakWindowManager = BreakWindowManager(),
         autoStart: Bool = true
     ) {
         self.activityMonitor = activityMonitor
         self.contextProvider = contextProvider
         self.dailyStatsStore = dailyStatsStore
+        self.breakWindowManager = breakWindowManager
         self.todayStats = dailyStatsStore.todayStats()
 
         let loadedSettings: TimerSettings
@@ -333,13 +339,23 @@ internal final class TimerManager: ObservableObject {
         pause(reason: .systemLocked)
     }
 
-    func handleSystemUnlock() {
+    func handleSystemUnlock(inactiveElapsed: TimeInterval = 0, wasLocked: Bool = true) {
         runOnMain {
             // 保留用户在锁屏前主动触发的手动暂停
             if case .paused(_, .manual) = self.state {
                 return
             }
-            self.resetTimer()
+            let shouldReset = BreakDelayEvaluator.shouldResetOnSystemReturn(
+                inactiveElapsed: inactiveElapsed,
+                wasLocked: wasLocked,
+                breakDuration: self.breakDuration,
+                idleResetDuration: self.idleResetDuration
+            )
+            if shouldReset {
+                self.resetTimer()
+            } else {
+                self.resume()
+            }
         }
     }
 
@@ -619,13 +635,12 @@ internal final class TimerManager: ObservableObject {
                 pauseMediaOnBreak: settings.pauseMediaOnBreak,
                 resumeMediaWithHeadphones: settings.resumeMediaWithHeadphones
             )
-            if settings.autoResetOnIdle {
+            if let resetThreshold = idleResetDuration {
                 let elapsedWork = Date().timeIntervalSince1970 - startedAt
                 if BreakDelayEvaluator.shouldEnterAwayState(
                     elapsedWork: elapsedWork,
                     idleElapsed: idle,
-                    breakDuration: breakDuration,
-                    autoResetEnabled: settings.autoResetOnIdle
+                    idleResetDuration: resetThreshold
                 ) {
                     transition(to: .away)
                 }
@@ -690,10 +705,14 @@ internal final class TimerManager: ObservableObject {
 
         let clampedIdle = min(max(settings.idleDelaySeconds, 3), 120)
         let clampedMaxDelay = settings.maxDelayMinutes <= 0 ? 5 : min(settings.maxDelayMinutes, 10)
-        if clampedIdle != settings.idleDelaySeconds || clampedMaxDelay != settings.maxDelayMinutes {
+        let clampedIdleReset = max(0, min(settings.idleResetMinutes, 120))
+        if clampedIdle != settings.idleDelaySeconds
+            || clampedMaxDelay != settings.maxDelayMinutes
+            || clampedIdleReset != settings.idleResetMinutes {
             isAdjustingSettings = true
             settings.idleDelaySeconds = clampedIdle
             settings.maxDelayMinutes = clampedMaxDelay
+            settings.idleResetMinutes = clampedIdleReset
             isAdjustingSettings = false
         }
 
@@ -708,7 +727,7 @@ internal final class TimerManager: ObservableObject {
             preBreakHud.hide()
         }
 
-        if !settings.autoResetOnIdle && state == .away {
+        if settings.idleResetMinutes == 0 && state == .away {
             transition(to: .working(startedAt: Date().timeIntervalSince1970), notifyWorkStart: true)
         }
 
