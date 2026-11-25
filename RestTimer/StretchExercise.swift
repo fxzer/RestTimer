@@ -1,50 +1,54 @@
 import Foundation
 
-/// 休息全屏主题（3×3 共 9 款：3 款极淡静音系 + 3 款柔和护眼系 + 3 款静谧深色系）
+/// 休息全屏主题（4×3 共 12 款：静音冷调系 + 柔和护眼系 + 静谧深色极光系）
 enum BreakGradientTheme: String, Codable, CaseIterable, Equatable {
     case autoDayNight
     case frostedGlass
     case graphiteMist
-    case warmIvory
+    case slateIce
+    case midnightViolet
     case celadonEyeCare
     case warmPaper
+    case amberGlow
     case mistyTeal
     case forestMoss
     case auroraOcean
     case sunsetAmber
+    case smokyRose
 
-    /// 全部具象可选主题（不含自动轮换）
+    /// 全部具象可选主题（不含自动轮换，4 列 × 3 行）
     static let concreteThemes: [BreakGradientTheme] = [
-        .frostedGlass, .graphiteMist, .warmIvory,
-        .celadonEyeCare, .warmPaper, .mistyTeal,
-        .forestMoss, .auroraOcean, .sunsetAmber
+        .frostedGlass, .graphiteMist, .slateIce, .midnightViolet,
+        .celadonEyeCare, .warmPaper, .amberGlow, .mistyTeal,
+        .forestMoss, .auroraOcean, .sunsetAmber, .smokyRose
     ]
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(String.self)
+        self = BreakGradientTheme(rawValue: raw) ?? .autoDayNight
+    }
 
     var displayName: String {
         switch self {
         case .autoDayNight: return "自动轮换"
         case .frostedGlass: return "毛玻璃"
         case .graphiteMist: return "石墨灰"
-        case .warmIvory: return "素宣白"
+        case .slateIce: return "冰岩蓝"
+        case .midnightViolet: return "夜幕紫"
         case .celadonEyeCare: return "豆沙绿"
         case .warmPaper: return "暖羊皮"
+        case .amberGlow: return "琥珀金"
         case .mistyTeal: return "晨雾蓝"
-        case .forestMoss: return "森林"
-        case .auroraOcean: return "深海"
-        case .sunsetAmber: return "暮光"
+        case .forestMoss: return "森林绿"
+        case .auroraOcean: return "深海蓝"
+        case .sunsetAmber: return "暮光霞"
+        case .smokyRose: return "烟玫瑰"
         }
-    }
-
-    var isLightTheme: Bool {
-        self == .warmIvory
     }
 
     var isFrostedDesktop: Bool {
         self == .frostedGlass
-    }
-
-    var isStaticMinimal: Bool {
-        self == .frostedGlass || self == .warmIvory
     }
 }
 

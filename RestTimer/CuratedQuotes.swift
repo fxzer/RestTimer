@@ -81,6 +81,10 @@ enum CuratedQuoteLibrary {
     /// 洗牌袋状态：确保 60 条名言全部轮播一遍后再重新洗牌，避免短时间内撞句
     private static var shuffledBag: [CuratedQuote] = []
 
+    static func resetBag() {
+        shuffledBag.removeAll()
+    }
+
     static func nextQuote(excluding current: CuratedQuote? = nil) -> CuratedQuote {
         guard !all.isEmpty else {
             return CuratedQuote(text: "形劳而不倦，精神不散。", author: "《黄帝内经·素问》")

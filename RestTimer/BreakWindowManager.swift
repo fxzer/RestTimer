@@ -20,8 +20,11 @@ final class BreakWindowManager {
         case visible(windows: [NSWindow], timerManager: TimerManager)
     }
 
+    let displaySession = BreakDisplaySession()
     private var state: WindowState = .hidden
     private var screenObserver: NSObjectProtocol?
+    private var keyEventMonitor: Any?
+    private var escapeTapTimestamps: [TimeInterval] = []
 
     init() {
         screenObserver = NotificationCenter.default.addObserver(
@@ -50,6 +53,14 @@ final class BreakWindowManager {
             return
         }
 
+        displaySession.prepareSession(
+            totalBreakSeconds: timerManager.breakDuration,
+            themeSetting: timerManager.settings.breakGradientTheme
+        )
+        presentWindows(timerManager: timerManager, animated: animated)
+    }
+
+    private func presentWindows(timerManager: TimerManager, animated: Bool) {
         tearDownCurrentWindows(animated: false)
 
         // 仅比系统菜单栏高 1 级（~25）：完整覆盖桌面、Dock 与全屏应用，但绝不遮挡系统「强制退出 (⌘⌥Esc)」和系统安全弹窗
@@ -83,7 +94,7 @@ final class BreakWindowManager {
             visualEffectView.wantsLayer = true
             visualEffectView.autoresizingMask = [.width, .height]
 
-            let breakView = BreakView().environmentObject(timerManager)
+            let breakView = BreakView(session: displaySession).environmentObject(timerManager)
             let hostingView = FirstClickHostingView(rootView: breakView)
             hostingView.frame = visualEffectView.bounds
             hostingView.autoresizingMask = [.width, .height]
@@ -100,6 +111,7 @@ final class BreakWindowManager {
         }
 
         state = .visible(windows: windows, timerManager: timerManager)
+        installKeyboardShortcuts(timerManager: timerManager)
         NSApplication.shared.activate(ignoringOtherApps: true)
         primaryWindow?.makeKeyAndOrderFront(nil)
 
@@ -123,12 +135,72 @@ final class BreakWindowManager {
         tearDownCurrentWindows(animated: animated)
     }
 
-    private func handleScreenParametersChanged() {
+    func handleScreenParametersChanged() {
         guard case .visible(_, let timerManager) = state else { return }
-        show(timerManager: timerManager, animated: false)
+        presentWindows(timerManager: timerManager, animated: false)
+    }
+
+    @discardableResult
+    func handleKeyDown(_ event: NSEvent, timerManager: TimerManager) -> NSEvent? {
+        let totalBreak = max(1.0, timerManager.breakDuration)
+        let remaining = max(0.0, timerManager.remainingBreakTime)
+        let elapsed = max(0.0, totalBreak - remaining)
+
+        switch event.keyCode {
+        case 53: // Esc：预览态单按即退；正式休息态支持 ⌘⇧Esc 或 1.2 秒内连按 3 次 Esc 紧急逃生
+            if timerManager.isBreakPreview {
+                timerManager.endBreakPreview()
+                return nil
+            }
+            let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            if mods.contains([.command, .shift]) {
+                timerManager.emergencyExitBreak()
+                return nil
+            }
+            let now = Date().timeIntervalSince1970
+            escapeTapTimestamps = escapeTapTimestamps.filter { now - $0 <= 1.2 } + [now]
+            if escapeTapTimestamps.count >= 3 {
+                escapeTapTimestamps.removeAll()
+                timerManager.emergencyExitBreak()
+            }
+            return nil
+        case 123:
+            displaySession.stepCatalog(by: -1, totalBreakSeconds: totalBreak, elapsedSeconds: elapsed)
+            return nil
+        case 124, 49:
+            displaySession.stepCatalog(by: 1, totalBreakSeconds: totalBreak, elapsedSeconds: elapsed)
+            return nil
+        case 48:
+            displaySession.jumpToNextCategory(totalBreakSeconds: totalBreak, elapsedSeconds: elapsed)
+            return nil
+        case 46:
+            withAnimation(.timingCurve(0.22, 1.0, 0.36, 1.0, duration: 0.34)) {
+                timerManager.settings.enableBreakExerciseGuide.toggle()
+            }
+            return nil
+        default:
+            return event
+        }
+    }
+
+    private func installKeyboardShortcuts(timerManager: TimerManager) {
+        removeKeyboardShortcuts()
+        keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak timerManager] event in
+            guard let self = self, let timerManager = timerManager else { return event }
+            return self.handleKeyDown(event, timerManager: timerManager)
+        }
+    }
+
+    private func removeKeyboardShortcuts() {
+        if let monitor = keyEventMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyEventMonitor = nil
+        }
     }
 
     private func tearDownCurrentWindows(animated: Bool) {
+        removeKeyboardShortcuts()
+        escapeTapTimestamps.removeAll()
         guard case .visible(let windows, _) = state else { return }
         state = .hidden
 
