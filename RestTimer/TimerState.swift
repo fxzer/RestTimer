@@ -61,17 +61,6 @@ enum SessionState: Equatable {
         }
     }
 
-    var pendingOverdueSeconds: TimeInterval {
-        switch self {
-        case .pendingBreak(_, let overdue):
-            return overdue
-        case .paused(.pendingBreak(let overdue), _):
-            return overdue
-        default:
-            return 0
-        }
-    }
-
     var pausedRemainingTime: TimeInterval? {
         guard case .paused(let snapshot, _) = self else { return nil }
         switch snapshot {

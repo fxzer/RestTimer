@@ -4,7 +4,6 @@ import AppKit
 /// 极简 Apple 风格 60 分钟环形时钟表盘
 struct FocusClockDialView: View {
     let workMinutes: Int
-    let earlyNotifyMinutes: Int
     let onWorkMinutesChanged: (Int) -> Void
 
     @State private var isDragging = false
@@ -22,12 +21,6 @@ struct FocusClockDialView: View {
         Double(clampedWorkMinutes) / 60.0
     }
 
-    private var earlyStartProgress: Double {
-        guard earlyNotifyMinutes > 0, earlyNotifyMinutes < clampedWorkMinutes else {
-            return workProgress
-        }
-        return Double(clampedWorkMinutes - earlyNotifyMinutes) / 60.0
-    }
 
     private var primaryAccentColor: Color {
         Color.accentColor
@@ -67,7 +60,6 @@ struct FocusClockDialView: View {
                 }
         )
         .animation(.spring(response: 0.24, dampingFraction: 0.86), value: clampedWorkMinutes)
-        .animation(.spring(response: 0.24, dampingFraction: 0.86), value: earlyNotifyMinutes)
     }
 
     private var minuteTicksLayer: some View {

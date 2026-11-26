@@ -158,7 +158,6 @@ struct SettingsView: View {
 
                     FocusClockDialView(
                         workMinutes: currentWorkMinutes,
-                        earlyNotifyMinutes: currentEarlyMinutes,
                         onWorkMinutesChanged: { newWorkMin in
                             let safeEarly = min(currentEarlyMinutes, max(0, newWorkMin - 1))
                             applyTime(
