@@ -2,14 +2,15 @@ import SwiftUI
 import Combine
 import AppKit
 
-/// 单轴对称沉浸休息视图：支持 9 款克制静音主题（含毛玻璃与浅色素宣白）、贝塞尔丝滑滑块与键鼠轮播
+/// 单轴对称沉浸休息视图：中轴聚焦时间与动作，左侧边缘 Hover 展开主题抽屉，四角放置低打扰控制键
 struct BreakView: View {
     @EnvironmentObject var timerManager: TimerManager
     @ObservedObject var session: BreakDisplaySession
-    @Namespace private var themePillNamespace
 
     @State private var breathingIn = false
-    @State private var hoveredTheme: BreakGradientTheme?
+    @State private var isHoveringTopRightAction = false
+    @State private var isHoveringBottomControls = false
+    @State private var isHoveringQuote = false
 
     private var totalBreakSeconds: Double { max(1.0, timerManager.breakDuration) }
     private var remainingSeconds: Double { max(0.0, timerManager.remainingBreakTime) }
@@ -36,19 +37,39 @@ struct BreakView: View {
 
             // 2. 单一中轴对称布局
             VStack(spacing: 0) {
-                topControlBar
-                    .padding(.top, 34)
-
-                Spacer(minLength: 24)
+                Spacer(minLength: 32)
 
                 centerHeroStage
 
                 Spacer(minLength: 28)
 
                 quoteSection
-                    .padding(.bottom, 56)
+                    .padding(.bottom, 52)
             }
             .padding(.horizontal, 48)
+
+            // 3. 左侧边缘 Hover 主题抽屉（默认仅留微弱竖条提示）
+            BreakSideThemeDrawerView(
+                selectedThemeSetting: $timerManager.settings.breakGradientTheme,
+                displayedTheme: resolvedTheme,
+                onSelectAutoRotation: { session.advanceAutoTheme() },
+                onSelectTheme: { session.selectTheme($0) }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+
+            // 4. 右上角退出 / 跳过入口
+            if timerManager.isBreakPreview || timerManager.settings.showSkipButton {
+                topRightActionButton
+                    .padding(.top, 28)
+                    .padding(.trailing, 32)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            }
+
+            // 5. 右下角模式与视图切换圆钮
+            bottomRightModeControls
+                .padding(.bottom, 28)
+                .padding(.trailing, 32)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
@@ -58,160 +79,106 @@ struct BreakView: View {
         }
     }
 
-    // MARK: - 顶部丝滑滑动控制栏
+    // MARK: - 右上角退出 / 跳过
 
-    private var topControlBar: some View {
-        HStack(spacing: 10) {
-            Text(Date(), style: .time)
-                .font(.system(size: 14.5, weight: .medium, design: .rounded))
-                .foregroundColor(Color.white.opacity(0.84))
-                .monospacedDigit()
-
-            Rectangle()
-                .fill(Color.white.opacity(0.22))
-                .frame(width: 1, height: 18)
-
-            // 12 款主题滑动胶囊（全高 34pt 大热区 + 贝塞尔缓出滑块）
-            HStack(spacing: 1) {
-                ForEach(BreakGradientTheme.concreteThemes, id: \.self) { theme in
-                    let isCurrent = resolvedTheme == theme
-                    let isHovered = hoveredTheme == theme && !isCurrent
-                    Button {
-                        session.selectTheme(theme)
-                        timerManager.settings.breakGradientTheme = theme
-                    } label: {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(theme.palette.orb1)
-                                .frame(width: 7.5, height: 7.5)
-                            Text(theme.displayName)
-                                .font(.system(size: 13, weight: isCurrent ? .semibold : .medium))
-                        }
-                        .foregroundColor(isCurrent ? .white : Color.white.opacity(isHovered ? 0.88 : 0.64))
-                        .padding(.horizontal, 9)
-                        .frame(height: 34)
-                        .background {
-                            if isCurrent {
-                                Capsule()
-                                    .fill(Color.white.opacity(0.22))
-                                    .matchedGeometryEffect(id: "activeBreakThemePill", in: themePillNamespace)
-                            } else if isHovered {
-                                Capsule().fill(Color.white.opacity(0.10))
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .focusable(false)
-                    .onHover { hovering in
-                        withAnimation(.easeOut(duration: 0.14)) {
-                            hoveredTheme = hovering ? theme : (hoveredTheme == theme ? nil : hoveredTheme)
-                        }
-                    }
-                }
+    @ViewBuilder
+    private var topRightActionButton: some View {
+        if timerManager.isBreakPreview {
+            cornerActionCapsule(icon: "xmark.circle.fill", iconSize: 13.5, title: "退出") {
+                timerManager.endBreakPreview()
             }
-
-            Rectangle()
-                .fill(Color.white.opacity(0.22))
-                .frame(width: 1, height: 18)
-
-            // 极简纯图标切换键：拉伸引导 ⇄ 静谧呼吸
-            Button(action: toggleExerciseGuideMode) {
-                Image(systemName: timerManager.settings.enableBreakExerciseGuide ? "figure.cooldown" : "wind")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Color.white.opacity(0.88))
-                    .frame(width: 34, height: 34)
-                    .background(
-                        Circle()
-                            .fill(Color.white.opacity(timerManager.settings.enableBreakExerciseGuide ? 0.20 : 0.09))
-                    )
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .help(timerManager.settings.enableBreakExerciseGuide ? "切换为静谧呼吸模式 (M)" : "切换为拉伸引导模式 (M)")
-
-            if timerManager.settings.enableBreakExerciseGuide {
-                let isMulti = timerManager.settings.breakExerciseMultiView
-                Button(action: toggleExerciseMultiView) {
-                    Image(systemName: isMulti ? "rectangle.split.3x1.fill" : "rectangle.split.3x1")
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundColor(Color.white.opacity(0.88))
-                        .frame(width: 34, height: 34)
-                        .background(
-                            Circle()
-                                .fill(Color.white.opacity(isMulti ? 0.24 : 0.09))
-                        )
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .help(isMulti ? "切换为单张大图模式 (V)" : "切换为多张并排模式 (V)")
-            }
-
-            if timerManager.isBreakPreview {
-                Rectangle()
-                    .fill(Color.white.opacity(0.22))
-                    .frame(width: 1, height: 18)
-
-                Button {
-                    timerManager.endBreakPreview()
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                        Text("退出")
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(Color.white.opacity(0.86))
-                    .padding(.horizontal, 10)
-                    .frame(height: 34)
-                    .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .keyboardShortcut(.escape, modifiers: [])
-            } else if timerManager.settings.showSkipButton {
-                Rectangle()
-                    .fill(Color.white.opacity(0.22))
-                    .frame(width: 1, height: 18)
-
-                Button {
-                    timerManager.skipBreak()
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "forward.end.fill")
-                            .font(.system(size: 13))
-                        Text("跳过")
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(Color.white.opacity(0.86))
-                    .padding(.horizontal, 10)
-                    .frame(height: 34)
-                    .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
+            .keyboardShortcut(.escape, modifiers: [])
+        } else if timerManager.settings.showSkipButton {
+            cornerActionCapsule(icon: "forward.end.fill", iconSize: 12.5, title: "跳过") {
+                timerManager.skipBreak()
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 5)
-        .background(
-            Capsule()
-                .fill(Color.white.opacity(0.11))
-                .overlay(Capsule().stroke(Color.white.opacity(0.16), lineWidth: 0.5))
-        )
+    }
+
+    private func cornerActionCapsule(icon: String, iconSize: CGFloat, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: iconSize))
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .foregroundColor(Color.white.opacity(isHoveringTopRightAction ? 0.94 : 0.66))
+            .padding(.horizontal, 12)
+            .frame(height: 34)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(isHoveringTopRightAction ? 0.18 : 0.10))
+                    .overlay(Capsule().stroke(Color.white.opacity(isHoveringTopRightAction ? 0.28 : 0.14), lineWidth: 0.5))
+            )
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.14)) {
+                isHoveringTopRightAction = hovering
+            }
+        }
+    }
+
+    // MARK: - 右下角模式切换双圆钮
+
+    private var bottomRightModeControls: some View {
+        HStack(spacing: 10) {
+            if timerManager.settings.enableBreakExerciseGuide {
+                let isMulti = timerManager.settings.breakExerciseMultiView
+                cornerCircleButton(
+                    icon: isMulti ? "rectangle.split.3x1.fill" : "rectangle.split.3x1",
+                    iconSize: 14,
+                    isActive: isMulti,
+                    help: isMulti ? "切换为单张大图模式 (V)" : "切换为多张并排模式 (V)",
+                    action: toggleExerciseMultiView
+                )
+            }
+
+            cornerCircleButton(
+                icon: timerManager.settings.enableBreakExerciseGuide ? "figure.cooldown" : "wind",
+                iconSize: 14.5,
+                isActive: timerManager.settings.enableBreakExerciseGuide,
+                help: timerManager.settings.enableBreakExerciseGuide ? "切换为静谧呼吸模式 (M)" : "切换为拉伸引导模式 (M)",
+                action: toggleExerciseGuideMode
+            )
+        }
+        .opacity(isHoveringBottomControls ? 1.0 : 0.52)
+        .animation(.easeOut(duration: 0.16), value: isHoveringBottomControls)
+        .onHover { hovering in
+            isHoveringBottomControls = hovering
+        }
+    }
+
+    private func cornerCircleButton(icon: String, iconSize: CGFloat, isActive: Bool, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: iconSize, weight: .semibold))
+                .foregroundColor(Color.white.opacity(isHoveringBottomControls ? 0.94 : 0.72))
+                .frame(width: 38, height: 38)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(isActive ? 0.20 : 0.11))
+                        .overlay(Circle().stroke(Color.white.opacity(isHoveringBottomControls ? 0.28 : 0.14), lineWidth: 0.6))
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .help(help)
     }
 
     // MARK: - 居中视觉核心舞台
 
     private var centerHeroStage: some View {
-        VStack(spacing: timerManager.settings.breakExerciseMultiView ? 18 : 24) {
+        VStack(spacing: timerManager.settings.breakExerciseMultiView ? 18 : 22) {
             if timerManager.settings.enableBreakExerciseGuide, let exercise = currentExercise {
                 if timerManager.settings.breakExerciseMultiView {
                     multiExerciseStage(activeExercise: exercise)
                 } else {
-                    countdownToggleButton(fontSize: 56)
+                    timeAndCountdownHeader(countdownFontSize: 56)
 
                     BreakExerciseHeroView(
                         exercise: exercise,
@@ -240,27 +207,7 @@ struct BreakView: View {
                                 help: "切换下一招 (→ 或空格)",
                                 action: nextExercise
                             )
-                            heroActionButton(
-                                icon: "rectangle.split.3x1",
-                                text: "多张并排",
-                                help: "同屏并排查看 3 个动作 (V)",
-                                action: toggleExerciseMultiView
-                            )
                         }
-
-                        VStack(spacing: 7) {
-                            ForEach(exercise.steps, id: \.self) { step in
-                                Text(step)
-                                    .font(.system(size: 19, weight: .regular, design: .rounded))
-                                    .foregroundColor(Color.white.opacity(0.90))
-                                    .multilineTextAlignment(.center)
-                                    .shadow(color: Color.black.opacity(0.12), radius: 2, x: 0, y: 1)
-                            }
-                        }
-                        .frame(height: 56, alignment: .top)
-                        .padding(.top, 2)
-                        .id("steps-\(exercise.id)")
-                        .transition(.opacity)
                     }
                 }
             } else {
@@ -295,7 +242,7 @@ struct BreakView: View {
                         .frame(width: 280, height: 280)
 
                     Button(action: toggleExerciseGuideMode) {
-                        VStack(spacing: 10) {
+                        VStack(spacing: 6) {
                             Text(breathingIn ? "深吸气 · 4s" : "慢呼气 · 4s")
                                 .font(.system(size: 18, weight: .medium, design: .rounded))
                                 .foregroundColor(themeAccentColor)
@@ -303,6 +250,7 @@ struct BreakView: View {
                                 .font(.system(size: 74, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white)
                                 .monospacedDigit()
+                            currentTimeLabel
                         }
                         .contentShape(Circle())
                     }
@@ -320,22 +268,28 @@ struct BreakView: View {
         Button {
             session.advanceQuote()
         } label: {
-            VStack(spacing: 8) {
-                Text("“ \(session.currentQuote.text) ”")
-                    .font(.system(size: 23, weight: .medium, design: .rounded))
-                    .foregroundColor(Color.white.opacity(0.90))
+            VStack(spacing: 6) {
+                Text(session.currentQuote.text)
+                    .font(.system(size: 21, weight: .medium, design: .rounded))
+                    .foregroundColor(Color.white.opacity(isHoveringQuote ? 0.88 : 0.42))
                     .multilineTextAlignment(.center)
-                    .shadow(color: Color.black.opacity(0.14), radius: 3, x: 0, y: 1)
+                    .shadow(color: Color.black.opacity(isHoveringQuote ? 0.14 : 0.0), radius: 3, x: 0, y: 1)
 
-                Text("—— \(session.currentQuote.author)")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundColor(Color.white.opacity(0.62))
+                Text(session.currentQuote.author)
+                    .font(.system(size: 13.5, weight: .regular))
+                    .foregroundColor(Color.white.opacity(0.68))
+                    .opacity(isHoveringQuote ? 1.0 : 0.0)
             }
             .frame(maxWidth: 760)
+            .contentShape(Rectangle())
+            .animation(.easeInOut(duration: 0.18), value: isHoveringQuote)
         }
         .buttonStyle(.plain)
         .focusable(false)
         .help("点击切换下一条名言")
+        .onHover { hovering in
+            isHoveringQuote = hovering
+        }
     }
 
     // MARK: - 会话动作转发（同步更新所有显示器）
@@ -381,7 +335,7 @@ struct BreakView: View {
             elapsedSeconds: elapsedSeconds
         )
         return VStack(spacing: 18) {
-            countdownToggleButton(fontSize: 48)
+            timeAndCountdownHeader(countdownFontSize: 48)
 
             HStack(alignment: .top, spacing: 18) {
                 ForEach(batch) { item in
@@ -404,12 +358,6 @@ struct BreakView: View {
                     action: jumpToNextCategory
                 )
                 heroActionButton(
-                    icon: "rectangle.portrait",
-                    text: "切回单张",
-                    help: "切换为单张大图模式 (V)",
-                    action: toggleExerciseMultiView
-                )
-                heroActionButton(
                     icon: "arrow.triangle.2.circlepath",
                     text: "换一批 (\(session.batchProgressLabel(for: batch)))",
                     help: "同时切换下一组 \(BreakDisplaySession.multiCardBatchCount) 个动作 (→ 或空格)",
@@ -417,6 +365,20 @@ struct BreakView: View {
                 )
             }
         }
+    }
+
+    private func timeAndCountdownHeader(countdownFontSize: CGFloat) -> some View {
+        VStack(spacing: 4) {
+            currentTimeLabel
+            countdownToggleButton(fontSize: countdownFontSize)
+        }
+    }
+
+    private var currentTimeLabel: some View {
+        Text(Date(), style: .time)
+            .font(.system(size: 19, weight: .medium, design: .rounded))
+            .foregroundColor(Color.white.opacity(0.66))
+            .monospacedDigit()
     }
 
     private func countdownToggleButton(fontSize: CGFloat) -> some View {

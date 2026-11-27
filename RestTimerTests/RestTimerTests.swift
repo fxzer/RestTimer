@@ -727,9 +727,11 @@ final class RestTimerTests: XCTestCase {
         session.prepareSession(totalBreakSeconds: 120, themeSetting: .autoDayNight)
         XCTAssertEqual(session.displayedTheme, BreakGradientTheme.concreteThemes[1])
 
-        // 显式切主题、切名言、切动作均作用于同一个共享会话
+        // 显式切主题、自动轮换切下一款、切名言、切动作均作用于同一个共享会话
         session.selectTheme(.midnightViolet)
         XCTAssertEqual(session.displayedTheme, .midnightViolet)
+        session.advanceAutoTheme()
+        XCTAssertNotEqual(session.displayedTheme, .midnightViolet)
 
         let quoteBefore = session.currentQuote
         session.advanceQuote()

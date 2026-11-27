@@ -131,6 +131,19 @@ final class BreakDisplaySession: ObservableObject {
         }
     }
 
+    func advanceAutoTheme() {
+        let themes = BreakGradientTheme.concreteThemes
+        guard !themes.isEmpty else { return }
+        let nextIndex: Int
+        if let currentIdx = themes.firstIndex(of: displayedTheme) {
+            nextIndex = (currentIdx + 1) % themes.count
+        } else {
+            nextIndex = rotationThemeIndex % themes.count
+        }
+        rotationThemeIndex = (nextIndex + 1) % themes.count
+        selectTheme(themes[nextIndex])
+    }
+
     func advanceQuote() {
         withAnimation(.easeInOut(duration: 0.28)) {
             currentQuote = CuratedQuoteLibrary.nextQuote(excluding: currentQuote)
