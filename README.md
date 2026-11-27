@@ -11,7 +11,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/macOS-13.7%2B-000000?logo=apple" alt="macOS 13.7+" />
-  <img src="https://img.shields.io/badge/Version-1.5.15-0A84FF" alt="Version 1.5.15" />
+  <img src="https://img.shields.io/badge/Version-1.5.17-0A84FF" alt="Version 1.5.17" />
 </p>
 
 ---
