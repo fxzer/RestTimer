@@ -1,6 +1,44 @@
 import SwiftUI
 
-/// 多张并排模式单张卡片（204×272 严格 3:4 缩略图 + 部位角标 + 动作要点，点击放大为单张详情）
+/// 图片卡片底部向上渐隐的动作说明浮层（仅 Hover 时渐显，不额外占用卡片外部高度）
+struct ExerciseStepsOverlay: View {
+    let steps: [String]
+    var fontSize: CGFloat = 11.5
+    var horizontalPadding: CGFloat = 12
+    var verticalPadding: CGFloat = 9
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ForEach(steps, id: \.self) { step in
+                Text(step)
+                    .font(.system(size: fontSize, weight: .medium, design: .rounded))
+                    .foregroundColor(Color.white.opacity(0.96))
+                    .shadow(color: Color.black.opacity(0.42), radius: 2.5, x: 0, y: 1)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, horizontalPadding)
+        .padding(.top, verticalPadding + 16)
+        .padding(.bottom, verticalPadding)
+        .background(
+            LinearGradient(
+                stops: [
+                    .init(color: Color.black.opacity(0.0), location: 0.0),
+                    .init(color: Color.black.opacity(0.24), location: 0.28),
+                    .init(color: Color.black.opacity(0.46), location: 0.64),
+                    .init(color: Color.black.opacity(0.58), location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+        .allowsHitTesting(false)
+    }
+}
+
+/// 多张并排模式单张卡片（204×272 严格 3:4 缩略图 + 部位角标，Hover 时在图底浮现动作要点，点击放大为单张详情）
 struct BreakExerciseBatchCard: View {
     let exercise: StretchExercise
     let positionText: String
@@ -21,7 +59,6 @@ struct BreakExerciseBatchCard: View {
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 204, height: 272)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
 
                     HStack(spacing: 4) {
@@ -39,21 +76,28 @@ struct BreakExerciseBatchCard: View {
                     .padding(.vertical, 4)
                     .background(Capsule().fill(Color.black.opacity(0.45)))
                     .padding(8)
-                }
 
-                VStack(spacing: 4) {
-                    Text(exercise.name)
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-
-                    Text(exercise.steps.joined(separator: "；"))
-                        .font(.system(size: 12.5, weight: .regular, design: .rounded))
-                        .foregroundColor(Color.white.opacity(0.84))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .frame(width: 200, height: 34, alignment: .top)
+                    if isHovering, !exercise.steps.isEmpty {
+                        VStack {
+                            Spacer()
+                            ExerciseStepsOverlay(
+                                steps: exercise.steps,
+                                fontSize: 10.5,
+                                horizontalPadding: 10,
+                                verticalPadding: 7
+                            )
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    }
                 }
+                .frame(width: 204, height: 272)
+                .compositingGroup()
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                Text(exercise.name)
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
             }
             .padding(10)
             .background(
@@ -68,7 +112,7 @@ struct BreakExerciseBatchCard: View {
                     )
             )
             .scaleEffect(isHovering ? 1.02 : 1.0)
-            .animation(.easeOut(duration: 0.15), value: isHovering)
+            .animation(.easeOut(duration: 0.16), value: isHovering)
         }
         .buttonStyle(.plain)
         .focusable(false)

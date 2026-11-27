@@ -236,28 +236,43 @@ struct BreakExerciseHeroView: View {
     let onNext: () -> Void
 
     @State private var isHoveringStage = false
+    @State private var isHoveringCard = false
     @State private var isHoveringPrev = false
     @State private var isHoveringNext = false
 
     var body: some View {
         ZStack {
-            // 中央 255×340 3:4 插图（降采样加载，统一通透软影）
-            switch exercise.visual {
-            case .fitgateIllustration(let assetName):
-                let thumbnail = ExerciseImageLoader.shared.loadThumbnail(named: assetName)
-                (thumbnail != nil ? Image(nsImage: thumbnail!) : Image(assetName))
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 255, height: 340)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .shadow(
-                        color: Color.black.opacity(0.24),
-                        radius: 20,
-                        x: 0,
-                        y: 10
-                    )
-                    .id(assetName)
-                    .transition(.opacity.combined(with: .scale(scale: 0.985)))
+            // 中央 255×340 3:4 插图（降采样加载，仅 Hover 图片卡片时在底部浮现动作说明层）
+            ZStack(alignment: .bottom) {
+                switch exercise.visual {
+                case .fitgateIllustration(let assetName):
+                    let thumbnail = ExerciseImageLoader.shared.loadThumbnail(named: assetName)
+                    (thumbnail != nil ? Image(nsImage: thumbnail!) : Image(assetName))
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 255, height: 340)
+                        .id(assetName)
+                        .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                }
+
+                if isHoveringCard, !exercise.steps.isEmpty {
+                    ExerciseStepsOverlay(steps: exercise.steps)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+            }
+            .frame(width: 255, height: 340)
+            .compositingGroup()
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(
+                color: Color.black.opacity(0.24),
+                radius: 20,
+                x: 0,
+                y: 10
+            )
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    isHoveringCard = hovering
+                }
             }
 
             // 左右两侧悬浮清爽半透明圆形轮播切换按钮
